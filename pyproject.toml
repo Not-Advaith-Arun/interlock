@@ -9,5 +9,8 @@ description = "Bounded four-version model checking for asynchronous merge intera
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+interlock = "interlock.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["interlock*"]

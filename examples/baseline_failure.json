@@ -1,0 +1,23 @@
+{
+  "format": "interlock-scenario-v1",
+  "name": "Unsafe baseline must not be called a merge conflict",
+  "model": "retry-v1",
+  "versions": {
+    "base": {
+      "retry_limit": 1,
+      "deduplicate": false
+    },
+    "left": {
+      "retry_limit": 1,
+      "deduplicate": true
+    },
+    "right": {
+      "retry_limit": 1,
+      "deduplicate": true
+    },
+    "merged": {
+      "retry_limit": 1,
+      "deduplicate": false
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "format": "interlock-scenario-v1",
+  "name": "Cancellation and callback guard interaction (manual FSM)",
+  "model": "fsm-v1",
+  "versions": {
+    "base": {
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "on": {
+            "allocate": "active"
+          },
+          "violations": []
+        },
+        "active": {
+          "on": {
+            "cancel": "done",
+            "callback": "done"
+          },
+          "violations": []
+        },
+        "cancelled": {
+          "on": {
+            "callback": "done"
+          },
+          "violations": []
+        },
+        "done": {
+          "on": {},
+          "violations": []
+        },
+        "freed_access": {
+          "on": {},
+          "violations": [
+            "callback_must_not_access_released_resource"
+          ]
+        }
+      }
+    },
+    "left": {
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "on": {
+            "allocate": "active"
+          },
+          "violations": []
+        },
+        "active": {
+          "on": {
+            "cancel": "cancelled",
+            "callback": "done"
+          },
+          "violations": []
+        },
+        "cancelled": {
+          "on": {
+            "callback": "done"
+          },
+          "violations": []
+        },
+        "done": {
+          "on": {},
+          "violations": []
+        },
+        "freed_access": {
+          "on": {},
+          "violations": [
+            "callback_must_not_access_released_resource"
+          ]
+        }
+      }
+    },
+    "right": {
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "on": {
+            "allocate": "active"
+          },
+          "violations": []
+        },
+        "active": {
+          "on": {
+            "cancel": "done",
+            "callback": "done"
+          },
+          "violations": []
+        },
+        "cancelled": {
+          "on": {
+            "callback": "freed_access"
+          },
+          "violations": []
+        },
+        "done": {
+          "on": {},
+          "violations": []
+        },
+        "freed_access": {
+          "on": {},
+          "violations": [
+            "callback_must_not_access_released_resource"
+          ]
+        }
+      }
+    },
+    "merged": {
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "on": {
+            "allocate": "active"
+          },
+          "violations": []
+        },
+        "active": {
+          "on": {
+            "cancel": "cancelled",
+            "callback": "done"
+          },
+          "violations": []
+        },
+        "cancelled": {
+          "on": {
+            "callback": "freed_access"
+          },
+          "violations": []
+        },
+        "done": {
+          "on": {},
+          "violations": []
+        },
+        "freed_access": {
+          "on": {},
+          "violations": [
+            "callback_must_not_access_released_resource"
+          ]
+        }
+      }
+    }
+  }
+}
