@@ -1,0 +1,11 @@
+--- a/producer.py
++++ b/producer.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ class Producer:
+-    MAX_ATTEMPTS = 1
++    MAX_ATTEMPTS = 2
+     RETRY_DELAY = 10
+ 
+     def __init__(self, transport, clock):

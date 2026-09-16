@@ -7,6 +7,7 @@ import sys
 
 from . import __version__
 from .engine import make_witness, replay_witness, search
+from .fixture import FIXTURES, check_fixture, replay_fixture, validate_fixture
 from .scenario import MAX_WITNESS_BYTES, canonical, read_json, validate_scenario
 
 
@@ -51,6 +52,33 @@ def _show_report(report: dict) -> None:
         for version, outcome in report["candidate"]["outcomes"].items():
             print(f"  {version:6} {json.dumps(outcome['state'], sort_keys=True)}")
     print(report["scope"])
+    if "fixture" in report:
+        checked = report["fixture"]
+        print(f"Bundled fixture {checked['fixture']}: {checked['status']}")
+        if "coverage" in checked:
+            print(f"  Checked {checked['coverage']['schedules_checked']} legal schedule prefixes; "
+                  f"complete within bound: {str(checked['coverage']['complete_up_to_depth']).lower()}")
+        if checked.get("first_mismatch"):
+            _show_fixture(checked["first_mismatch"])
+        elif checked.get("candidate_replay"):
+            print("  Actual business effects: " + ", ".join(
+                f"{version}={len(outcome['effect_records'])}"
+                for version, outcome in checked["candidate_replay"]["observed_outcomes"].items()))
+
+
+def _show_fixture(result):
+    print(f"Bundled fixture agreement: {str(result['agreement']).lower()}")
+    print(f"Observed interaction reproduced: {str(result['interaction_reproduced']).lower()}")
+    for item in result["trace"]:
+        print(f"{item['step']:2} {item['event'] or '(initial)'}")
+        for version, outcome in item["observed"].items():
+            print(f"   {version:6} effects={len(outcome['effect_records'])} "
+                  f"requests={outcome['state']['requests']} acks={outcome['state']['acks']} "
+                  f"clock={outcome['clock']}")
+        for mismatch in item["mismatches"]:
+            print(f"   MISMATCH {mismatch['version']}.{mismatch['field']}: "
+                  f"expected {mismatch['expected']!r}; observed {mismatch['observed']!r}")
+    print(result["scope"])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -65,30 +93,63 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--report", help="Also write JSON report to this local file")
     check.add_argument("--witness", help="Write shortest candidate witness if one is found")
     check.add_argument("--force", action="store_true", help="Allow replacement of existing output files")
+    check.add_argument("--fixture", choices=sorted(FIXTURES),
+                       help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
     reproduce = commands.add_parser("replay", help="Replay a self-contained witness")
     reproduce.add_argument("witness")
     reproduce.add_argument("--json", action="store_true")
+    reproduce.add_argument("--fixture", choices=sorted(FIXTURES),
+                           help="Opt in to replaying this witness against trusted bundled handlers")
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
             _validate_outputs(args.scenario, [path for path in (args.report, args.witness) if path], args.force)
             scenario = validate_scenario(read_json(args.scenario))
+            if args.fixture:
+                validate_fixture(scenario, args.fixture)
             report = search(scenario, args.max_depth, args.max_states)
-            if args.witness and report["candidate"] is None and Path(args.witness).exists():
-                raise ValueError("no candidate found; refusing to leave an existing witness that describes an older run")
+            witness_allowed = report["candidate"] is not None
+            if args.fixture:
+                report["model_status"] = report["status"]
+                if report["status"] == "incomplete":
+                    report["fixture"] = {"fixture": args.fixture, "status": "not_run",
+                                         "reason": "Model search exceeded its state budget."}
+                    witness_allowed = False
+                else:
+                    report["fixture"] = check_fixture(scenario, args.fixture, max_depth=args.max_depth)
+                    fixture_status = report["fixture"]["status"]
+                    if fixture_status != "agreement":
+                        report["status"] = fixture_status
+                        witness_allowed = False
+                    elif report["candidate"]:
+                        report["fixture"]["candidate_replay"] = replay_fixture(
+                            scenario, report["candidate"]["events"], args.fixture)
+            if args.witness and not witness_allowed and Path(args.witness).exists():
+                raise ValueError("no verified candidate available; refusing to leave an existing witness that describes an older run")
             if args.report:
                 _write(args.report, report, args.force)
-            if args.witness and report["candidate"] is not None:
+            if args.witness and witness_allowed:
                 _write(args.witness, make_witness(scenario, report), args.force,
                        compact=True, max_bytes=MAX_WITNESS_BYTES)
             if args.json:
                 print(json.dumps(report, indent=2, sort_keys=True))
             else:
                 _show_report(report)
-                if args.witness and report["candidate"] is None:
-                    print("No witness written: no interaction candidate was found.")
+                if args.witness and not witness_allowed:
+                    print("No witness written: no verified candidate is available within the requested scope.")
+            if report["status"] == "fixture_mismatch":
+                return 4
             return 3 if report["status"] == "incomplete" else int(report["status"] != "no_interaction_within_bound")
-        result = replay_witness(read_json(args.witness, max_bytes=MAX_WITNESS_BYTES))
+        witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
+        result = replay_witness(witness)
+        if args.fixture:
+            result = replay_fixture(witness["scenario"], witness["events"], args.fixture)
+            if args.json:
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                _show_fixture(result)
+            return 4 if not result["agreement"] else int(any(
+                not outcome["passed"] for outcome in result["observed_outcomes"].values()))
         if args.json:
             print(json.dumps(result, indent=2, sort_keys=True))
         else:
