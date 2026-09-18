@@ -1,0 +1,23 @@
+{
+  "format": "interlock-scenario-v1",
+  "name": "Two-job acknowledgement correlation: safe",
+  "model": "multi-job-v1",
+  "versions": {
+    "base": {
+      "max_in_flight": 1,
+      "correlate_ack": true
+    },
+    "left": {
+      "max_in_flight": 2,
+      "correlate_ack": true
+    },
+    "right": {
+      "max_in_flight": 1,
+      "correlate_ack": true
+    },
+    "merged": {
+      "max_in_flight": 2,
+      "correlate_ack": true
+    }
+  }
+}
