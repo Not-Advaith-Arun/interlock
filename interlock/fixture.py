@@ -90,6 +90,24 @@ def source_identity(name):
                          for version, revision in fixture.revisions.items()}}
 
 
+def validate_witness_fixture(witness, name):
+    """Check pinned content before constructing any application handlers.
+
+    Witness paths are inert data: only installed, allowlisted sources are read.
+    Legacy model witnesses remain usable, but cannot verify source provenance.
+    """
+    validate_fixture(witness["scenario"], name)
+    binding = witness.get("fixture")
+    if binding is None:
+        return "unpinned"
+    if binding["name"] != name:
+        raise ValueError(f"witness pins fixture {binding['name']!r}, not {name!r}")
+    if binding["source_identity"] != source_identity(name):
+        raise ValueError("fixture source identity does not match witness; restore the pinned installation "
+                         "or use --model-only to replay only the embedded model")
+    return "verified"
+
+
 class FixtureRuntime:
     """A real handler instance with controlled message and timer delivery."""
 

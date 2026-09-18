@@ -7,7 +7,8 @@ import sys
 
 from . import __version__
 from .engine import make_witness, replay_witness, search
-from .fixture import FIXTURES, check_fixture, replay_fixture, validate_fixture
+from .fixture import (FIXTURES, check_fixture, replay_fixture, validate_fixture,
+                      validate_witness_fixture)
 from .scenario import MAX_WITNESS_BYTES, canonical, read_json, validate_scenario
 
 
@@ -98,8 +99,11 @@ def main(argv: list[str] | None = None) -> int:
     reproduce = commands.add_parser("replay", help="Replay a self-contained witness")
     reproduce.add_argument("witness")
     reproduce.add_argument("--json", action="store_true")
-    reproduce.add_argument("--fixture", choices=sorted(FIXTURES),
+    replay_mode = reproduce.add_mutually_exclusive_group()
+    replay_mode.add_argument("--fixture", choices=sorted(FIXTURES),
                            help="Opt in to replaying this witness against trusted bundled handlers")
+    replay_mode.add_argument("--model-only", action="store_true",
+                             help="Replay only the embedded model, without checking pinned fixture sources")
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
@@ -142,17 +146,28 @@ def main(argv: list[str] | None = None) -> int:
             return 3 if report["status"] == "incomplete" else int(report["status"] != "no_interaction_within_bound")
         witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
         result = replay_witness(witness)
+        if "fixture" in witness and not (args.fixture or args.model_only):
+            raise ValueError(f"this witness pins fixture {witness['fixture']['name']!r}; "
+                             f"use --fixture {witness['fixture']['name']} or --model-only")
         if args.fixture:
+            provenance = validate_witness_fixture(witness, args.fixture)
             result = replay_fixture(witness["scenario"], witness["events"], args.fixture)
+            result["source_verification"] = provenance
             if args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
+                print("Fixture source identity: " + provenance)
                 _show_fixture(result)
             return 4 if not result["agreement"] else int(any(
                 not outcome["passed"] for outcome in result["observed_outcomes"].values()))
+        result["execution_scope"] = "model_only"
+        if "fixture" in witness:
+            result["source_verification"] = "not_checked"
         if args.json:
             print(json.dumps(result, indent=2, sort_keys=True))
         else:
+            if "fixture" in witness:
+                print("Model-only replay: pinned fixture sources were not checked or executed.")
             print(f"Interaction reproduced: {str(result['interaction_reproduced']).lower()}")
             for item in result["trace"]:
                 print(f"{item['step']:2} {item['event'] or '(initial)'}")

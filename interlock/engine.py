@@ -143,14 +143,41 @@ def make_witness(scenario: dict, report: dict) -> dict:
         raise ValueError("report belongs to a different scenario")
     if report["candidate"] is None:
         raise ValueError("report contains no interaction candidate")
-    return {"format": "interlock-witness-v1", "scenario": scenario,
-            "scenario_sha256": fingerprint(scenario), "events": report["candidate"]["events"]}
+    witness = {"format": "interlock-witness-v1", "scenario": scenario,
+               "scenario_sha256": fingerprint(scenario), "events": report["candidate"]["events"]}
+    if "fixture" in report:
+        checked = report["fixture"]
+        reproduced = checked.get("candidate_replay", {})
+        if (checked.get("status") != "agreement"
+                or not report["coverage"]["complete_up_to_depth"]
+                or not reproduced.get("agreement")
+                or not reproduced.get("interaction_reproduced")
+                or reproduced.get("events") != witness["events"]
+                or reproduced.get("source_identity") != checked.get("source_identity")):
+            raise ValueError("fixture witness requires a complete check and an agreeing candidate replay")
+        witness.update(format="interlock-witness-v2", fixture={
+            "name": checked["fixture"], "source_identity": checked["source_identity"]})
+        witness["witness_sha256"] = fingerprint(witness)
+    return witness
 
 
 def replay_witness(witness: Any) -> dict:
-    if (not isinstance(witness, dict)
-            or set(witness) != {"format", "scenario", "scenario_sha256", "events"}
-            or witness["format"] != "interlock-witness-v1"):
+    if not isinstance(witness, dict):
+        raise ValueError("unsupported witness format")
+    fields = {"format", "scenario", "scenario_sha256", "events"}
+    if witness.get("format") == "interlock-witness-v2":
+        fields |= {"fixture", "witness_sha256"}
+        if set(witness) != fields:
+            raise ValueError("unsupported witness format")
+        binding = witness["fixture"]
+        if (not isinstance(binding, dict) or set(binding) != {"name", "source_identity"}
+                or not isinstance(binding["name"], str) or not binding["name"]
+                or not isinstance(binding["source_identity"], dict)):
+            raise ValueError("invalid witness fixture identity")
+        payload = {key: value for key, value in witness.items() if key != "witness_sha256"}
+        if witness["witness_sha256"] != fingerprint(payload):
+            raise ValueError("witness fingerprint does not match its contents")
+    elif witness.get("format") != "interlock-witness-v1" or set(witness) != fields:
         raise ValueError("unsupported witness format")
     validate_scenario(witness["scenario"])
     if witness["scenario_sha256"] != fingerprint(witness["scenario"]):
