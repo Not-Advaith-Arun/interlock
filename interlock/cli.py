@@ -8,10 +8,12 @@ import sys
 import tempfile
 
 from . import __version__
-from .engine import make_witness, replay_witness, search
-from .fixture import (FIXTURES, MAX_FIXTURE_SCHEDULES, check_fixture, fixture_catalog,
-                      fixture_scenario, replay_fixture, validate_fixture, validate_witness_fixture)
+from .engine import make_witness, replay_witness
+from .fixture import (FIXTURES, MAX_FIXTURE_SCHEDULES, fixture_catalog,
+                      fixture_scenario, replay_fixture, validate_witness_fixture)
 from .scenario import MAX_WITNESS_BYTES, canonical, read_json, validate_scenario
+from .runner import run_check
+from .suite import EXIT_CODES as SUITE_EXIT_CODES, EXPECTED_WITNESSES, run_suite
 
 
 def _write(path: str, value: dict, force: bool = False, *, compact: bool = False,
@@ -111,7 +113,7 @@ def _show_fixture(result):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Find bounded behavioral merge interactions in explicit models.",
-        epilog="Exit codes: 0 no failure within scope; 1 failure found; 2 invalid input or file error; "
+        epilog="Exit codes: 0 no failure within scope or expected suite results; 1 failure found or suite expectation failed; 2 invalid input or file error; "
                "3 incomplete exploration; 4 model/handler mismatch.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -133,6 +135,16 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--force", action="store_true", help="Allow replacement of existing output files")
     check.add_argument("--fixture", choices=sorted(FIXTURES),
                        help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
+    suite = commands.add_parser("suite", help="Verify all bundled conflict/control expectations in real handlers")
+    suite.add_argument("--fixture", action="append", choices=sorted(EXPECTED_WITNESSES),
+                       help="Check only this fixture (repeat to select several; default: all)")
+    suite.add_argument("--max-depth", type=int, default=12,
+                       help="Event bound; suite success requires exhausting finite fixtures (default: 12)")
+    suite.add_argument("--max-states", type=int, default=50_000)
+    suite.add_argument("--max-schedules", type=int, default=MAX_FIXTURE_SCHEDULES)
+    suite.add_argument("--json", action="store_true")
+    suite.add_argument("--report", help="Also write the full suite report to this file")
+    suite.add_argument("--force", action="store_true", help="Allow replacement of an existing report")
     reproduce = commands.add_parser("replay", help="Replay a self-contained witness")
     reproduce.add_argument("witness")
     reproduce.add_argument("--json", action="store_true")
@@ -164,40 +176,33 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(json.dumps(scenario, indent=2, sort_keys=True))
             return 0
+        if args.command == "suite":
+            _validate_outputs(None, [args.report] if args.report else [], args.force)
+            result = run_suite(args.fixture, max_depth=args.max_depth,
+                               max_states=args.max_states, max_schedules=args.max_schedules)
+            if args.report:
+                _write(args.report, result, args.force)
+            if args.json:
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                print(f"Bundled regression suite: {result['status']}")
+                for case in result["cases"]:
+                    print(f"  {case['fixture']:24} {case['verdict']:16} "
+                          f"expected={case['expected_status']} observed={case['report']['status']}")
+                    if case["verdict"] != "passed":
+                        print(f"    {case['reason']}")
+                summary = result["summary"]
+                print(f"{summary['passed']}/{summary['cases']} passed; "
+                      f"{summary['schedules_checked']} prefixes, {summary['event_steps_executed']} scheduled steps.")
+                print(result["scope"])
+            return SUITE_EXIT_CODES[result["status"]]
         if args.command == "check":
-            if args.max_schedules is not None:
-                if not args.fixture:
-                    raise ValueError("--max-schedules requires --fixture")
-                if not 1 <= args.max_schedules <= MAX_FIXTURE_SCHEDULES:
-                    raise ValueError(f"--max-schedules must be between 1 and {MAX_FIXTURE_SCHEDULES}")
             _validate_outputs(args.scenario, [path for path in (args.report, args.witness) if path], args.force)
             scenario = validate_scenario(read_json(args.scenario))
-            if args.fixture:
-                validate_fixture(scenario, args.fixture)
-            report = search(scenario, args.max_depth, args.max_states)
-            witness_allowed = report["candidate"] is not None
-            if args.fixture:
-                report["model_status"] = report["status"]
-                if report["status"] == "incomplete":
-                    report["fixture"] = {"fixture": args.fixture, "status": "not_run",
-                                         "reason": "Model search exceeded its state budget."}
-                    witness_allowed = False
-                else:
-                    report["fixture"] = check_fixture(scenario, args.fixture, max_depth=args.max_depth,
-                                                       max_schedules=args.max_schedules or MAX_FIXTURE_SCHEDULES)
-                    fixture_status = report["fixture"]["status"]
-                    if fixture_status != "agreement":
-                        report["status"] = fixture_status
-                        witness_allowed = False
-                    elif report["candidate"]:
-                        report["fixture"]["candidate_replay"] = replay_fixture(
-                            scenario, report["candidate"]["events"], args.fixture)
-                        if not report["fixture"]["candidate_replay"]["agreement"]:
-                            report["status"] = report["fixture"]["status"] = "fixture_mismatch"
-                            report["fixture"]["first_mismatch"] = report["fixture"]["candidate_replay"]
-                            report["fixture"]["coverage"].update(complete_up_to_depth=False,
-                                                                  termination_reason="fixture_mismatch")
-                            witness_allowed = False
+            report = run_check(scenario, fixture=args.fixture, max_depth=args.max_depth,
+                               max_states=args.max_states, max_schedules=args.max_schedules)
+            witness_allowed = (report["candidate"] is not None
+                               and (not args.fixture or report["fixture"]["status"] == "agreement"))
             if args.witness and not witness_allowed and Path(args.witness).exists():
                 raise ValueError("no verified candidate available; refusing to leave an existing witness that describes an older run")
             witness = make_witness(scenario, report) if args.witness and witness_allowed else None

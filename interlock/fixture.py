@@ -120,7 +120,7 @@ def validate_fixture(scenario, name):
 def source_identity(name):
     """Hash installed bundled source; no path comes from scenario JSON."""
     fixture = FIXTURES[name]
-    paths = {"fixture.py", "models.py", "engine.py", "scenario.py"}
+    paths = {"fixture.py", "models.py", "engine.py", "scenario.py", "runner.py"}
     if fixture.model == "multi-job-v1":
         paths.update(("multijob.py", "multijob_fixture.py", "fixtures/multijob/services.py"))
     else:

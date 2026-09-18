@@ -99,7 +99,7 @@ class WorkflowTests(unittest.TestCase):
         real_replay = replay_fixture(data, ['start', 'cancel', 'fire_callback'], 'cancellation-conflict')
         real_replay['agreement'] = False
         real_replay['interaction_reproduced'] = False
-        with tempfile.TemporaryDirectory() as directory, patch('interlock.cli.replay_fixture', return_value=real_replay):
+        with tempfile.TemporaryDirectory() as directory, patch('interlock.runner.replay_fixture', return_value=real_replay):
             source = Path(directory)/'case.json'
             witness = Path(directory)/'witness.json'
             source.write_text(json.dumps(data))

@@ -251,7 +251,7 @@ class FixtureCliTests(unittest.TestCase):
             self.assertIn("Observed interaction reproduced: false", output)
 
     def test_model_budget_stop_skips_real_code_schedule_enumeration(self):
-        with patch("interlock.cli.check_fixture", side_effect=AssertionError("budget bypass")):
+        with patch("interlock.runner.check_fixture", side_effect=AssertionError("budget bypass")):
             code, output, error = self.invoke("check", str(ROOT / "examples/retry_conflict.json"),
                 "--fixture", "retry-conflict", "--max-states", "1", "--json")
         self.assertEqual(code, 3, error)
