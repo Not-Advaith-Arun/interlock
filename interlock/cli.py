@@ -2,8 +2,10 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
+import tempfile
 
 from . import __version__
 from .engine import make_witness, replay_witness, search
@@ -18,9 +20,24 @@ def _write(path: str, value: dict, force: bool = False, *, compact: bool = False
     if max_bytes is not None and len(payload.encode("utf-8")) > max_bytes:
         raise ValueError(f"output exceeds {max_bytes / 1_000_000:g} MB limit")
     destination = Path(path)
+    if destination.is_symlink():
+        raise ValueError(f"refusing symlink output: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w" if force else "x", encoding="utf-8") as stream:
-        stream.write(payload)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".tmp",
+                                             dir=destination.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if force:
+            os.replace(temporary, destination)
+        else:
+            # An exclusive hard link publishes the complete file and refuses a
+            # destination created after preflight. Both paths share a directory.
+            os.link(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def _validate_outputs(source: str | None, outputs: list[str], force: bool) -> None:
