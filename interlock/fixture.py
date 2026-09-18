@@ -5,6 +5,7 @@ as an oracle and observes actual queues, producer state, and business effects.
 """
 
 from collections import Counter, deque
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 import hashlib
 from pathlib import Path
@@ -79,6 +80,23 @@ FIXTURES = {
     "cancellation-fixed": Fixture(cancellation.FIXED_CONFIGS, cancellation.FIXED_REVISIONS,
                                   "cancellation-v1"),
 }
+
+
+def fixture_scenario(name):
+    """Return a fresh, editable example without constructing application code."""
+    if name not in FIXTURES:
+        raise ValueError("fixture must be one of: " + ", ".join(sorted(FIXTURES)))
+    fixture = FIXTURES[name]
+    return {"format": "interlock-scenario-v1", "name": name, "model": fixture.model,
+            "versions": deepcopy(fixture.configs)}
+
+
+def fixture_catalog():
+    return {"format": "interlock-fixtures-v1", "fixtures": [
+        {"name": name, "model": fixture.model,
+         "expected_status": "no_interaction_within_bound" if name.endswith("-fixed") else "merge_interaction_found",
+         "case": cancellation.EVIDENCE if fixture.model == "cancellation-v1" else {"kind": "synthetic"}}
+        for name, fixture in sorted(FIXTURES.items())]}
 
 
 def validate_fixture(scenario, name):
@@ -262,7 +280,7 @@ def check_fixture(scenario, name, *, max_depth=8, max_schedules=MAX_FIXTURE_SCHE
     if type(max_schedules) is not int or not 1 <= max_schedules <= MAX_FIXTURE_SCHEDULES:
         raise ValueError(f"max_schedules must be between 1 and {MAX_FIXTURE_SCHEDULES}")
     queue = deque([()])
-    checked = checked_steps = maximum_depth = 0
+    checked = checked_steps = maximum_depth = depth_limited = 0
     failure = None
     while queue and checked < max_schedules:
         events = queue.popleft()
@@ -273,9 +291,11 @@ def check_fixture(scenario, name, *, max_depth=8, max_schedules=MAX_FIXTURE_SCHE
         if not result["agreement"]:
             failure = result
             break
+        enabled = sorted({event for outcome in result["observed_outcomes"].values() for event in outcome["enabled"]})
         if len(events) < max_depth:
-            enabled = sorted({event for outcome in result["observed_outcomes"].values() for event in outcome["enabled"]})
             queue.extend(events + (event,) for event in enabled)
+        elif enabled:
+            depth_limited += 1
     complete = not queue and failure is None
     return {"format": "interlock-fixture-check-v1", "fixture": name,
             "case": cancellation.EVIDENCE if fixture.model == "cancellation-v1" else {"kind": "synthetic"},
@@ -283,6 +303,9 @@ def check_fixture(scenario, name, *, max_depth=8, max_schedules=MAX_FIXTURE_SCHE
             "source_identity": source_identity(name), "scenario_sha256": fingerprint(scenario),
             "bounds": {"max_depth": max_depth, "max_schedules": max_schedules},
             "coverage": {"complete_up_to_depth": complete, "schedules_checked": checked,
+                         "termination_reason": "fixture_mismatch" if failure else "schedule_budget" if queue else
+                                               "depth_bound" if depth_limited else "schedule_space_exhausted",
+                         "schedules_pending": len(queue), "depth_limited_prefixes": depth_limited,
                          "event_steps_executed": checked_steps, "depth_reached": maximum_depth},
             "first_mismatch": failure,
             "scope": "All checked legal prefixes against bundled handlers; no unbounded or arbitrary-source fidelity claim."}

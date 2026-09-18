@@ -88,7 +88,7 @@ def search(scenario: dict, max_depth: int = 8, max_states: int = 50_000) -> dict
     seen = {_key(first)}
     first_failures: dict[str, Any] = {v: None for v in VERSIONS}
     candidate = None
-    explored = transitions = depth_reached = 0
+    explored = transitions = depth_reached = depth_limited = 0
     incomplete = False
     while queue:
         node = queue.popleft()
@@ -102,6 +102,7 @@ def search(scenario: dict, max_depth: int = 8, max_states: int = 50_000) -> dict
             candidate = {"events": list(node.events), "outcomes": _outcomes(node),
                          "minimality": "shortest event count under this model and event ordering"}
         if len(node.events) == max_depth:
+            depth_limited += bool(_enabled(model, scenario, node))
             continue
         for event in _enabled(model, scenario, node):
             transitions += 1
@@ -130,6 +131,9 @@ def search(scenario: dict, max_depth: int = 8, max_states: int = 50_000) -> dict
             "model": scenario["model"], "scenario_sha256": fingerprint(scenario),
             "status": status, "bounds": {"max_depth": max_depth, "max_states": max_states},
             "coverage": {"complete_up_to_depth": not incomplete,
+                         "termination_reason": "state_budget" if incomplete else
+                                               "depth_bound" if depth_limited else "state_space_exhausted",
+                         "depth_limited_states": depth_limited,
                          "states_discovered": len(seen), "states_explored": explored,
                          "transitions_explored": transitions, "depth_reached": depth_reached},
             "versions": {v: {"passed_explored_states": first_failures[v] is None,
