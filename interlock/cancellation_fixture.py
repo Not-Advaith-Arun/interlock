@@ -135,7 +135,7 @@ class CancellationRuntime:
                 "violations": violations, "passed": not violations, "clock": self.loop.now}
 
     @staticmethod
-    def expected_observations(state):
+    def expected_observations(state, config=None):
         finished = state["future"] == "finished"
         return {"effect_records": [{"result": "ready"}] if finished else [],
                 "error_records": [{"type": "InvalidStateError"}] * state["errors"],

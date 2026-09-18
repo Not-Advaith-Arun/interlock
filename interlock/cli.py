@@ -99,6 +99,9 @@ def _show_fixture(result):
         for version, outcome in item["observed"].items():
             print(f"   {version:6} {json.dumps(outcome['state'], sort_keys=True)} "
                   f"effects={len(outcome['effect_records'])} clock={outcome['clock']}")
+            if "completion_causes" in outcome["state"]:
+                for cause in outcome["state"]["completion_causes"]:
+                    print(f"            {cause['acknowledgement_id']} → completed {cause['job_id']}")
         for mismatch in item["mismatches"]:
             print(f"   MISMATCH {mismatch['version']}.{mismatch['field']}: "
                   f"expected {mismatch['expected']!r}; observed {mismatch['observed']!r}")
