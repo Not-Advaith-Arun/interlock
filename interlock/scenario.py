@@ -30,7 +30,7 @@ def validate_scenario(value: Any) -> dict:
     if not isinstance(value["name"], str) or not value["name"] or len(value["name"]) > 200:
         raise ValueError("name must be a nonempty string of at most 200 characters")
     if not isinstance(value["model"], str) or value["model"] not in MODELS:
-        raise ValueError("model must be retry-v1 or fsm-v1")
+        raise ValueError("model must be one of: " + ", ".join(sorted(MODELS)))
     versions = value["versions"]
     if not isinstance(versions, dict) or set(versions) != set(VERSIONS):
         raise ValueError("versions must contain exactly base, left, right, and merged")

@@ -68,6 +68,54 @@ class RetryModel:
         return ("at_most_one_effect_per_job",) if state["effects"] > 1 else ()
 
 
+class CancellationModel:
+    """One future and one completion callback, with externally ordered cancellation.
+
+    This state machine does not execute asyncio or import the bundled handlers.
+    A cancelled future must never receive an unguarded completion callback.
+    """
+
+    def validate(self, config: Config) -> None:
+        if set(config) != {"deferred", "guard_cancelled"}:
+            raise ValueError("cancellation-v1 requires exactly deferred and guard_cancelled")
+        if any(type(value) is not bool for value in config.values()):
+            raise ValueError("deferred and guard_cancelled must be booleans")
+
+    def initial(self, config: Config) -> State:
+        return {"future": "absent", "callbacks": 0, "errors": 0}
+
+    def enabled(self, state: State, config: Config) -> tuple[str, ...]:
+        events = []
+        if state["future"] == "absent":
+            events.append("start")
+        if state["future"] == "pending":
+            events.append("cancel")
+        if state["callbacks"]:
+            events.append("fire_callback")
+        return tuple(events)
+
+    def step(self, state: State, event: str, config: Config) -> State:
+        result = dict(state)
+        if event == "start":
+            result.update(future="pending" if config["deferred"] else "finished",
+                          callbacks=int(config["deferred"]))
+        elif event == "cancel":
+            result["future"] = "cancelled"
+        elif event == "fire_callback":
+            result["callbacks"] -= 1
+            if result["future"] == "cancelled":
+                if not config["guard_cancelled"]:
+                    result["errors"] += 1
+            else:
+                result["future"] = "finished"
+        else:
+            raise ValueError(f"unknown cancellation event: {event}")
+        return result
+
+    def violations(self, state: State, config: Config) -> tuple[str, ...]:
+        return ("no_completion_after_cancellation",) if state["errors"] else ()
+
+
 class FiniteStateModel:
     """User-defined finite graphs without expressions, eval, or subprocesses."""
 
@@ -109,4 +157,5 @@ class FiniteStateModel:
         return tuple(config["states"][state["state"]]["violations"])
 
 
-MODELS: dict[str, Model] = {"retry-v1": RetryModel(), "fsm-v1": FiniteStateModel()}
+MODELS: dict[str, Model] = {"retry-v1": RetryModel(), "fsm-v1": FiniteStateModel(),
+                           "cancellation-v1": CancellationModel()}

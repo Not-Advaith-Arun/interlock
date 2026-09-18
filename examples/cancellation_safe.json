@@ -1,0 +1,23 @@
+{
+  "format": "interlock-scenario-v1",
+  "name": "Deferred completion and cancellation: safe",
+  "model": "cancellation-v1",
+  "versions": {
+    "base": {
+      "deferred": false,
+      "guard_cancelled": true
+    },
+    "left": {
+      "deferred": true,
+      "guard_cancelled": true
+    },
+    "right": {
+      "deferred": false,
+      "guard_cancelled": true
+    },
+    "merged": {
+      "deferred": true,
+      "guard_cancelled": true
+    }
+  }
+}

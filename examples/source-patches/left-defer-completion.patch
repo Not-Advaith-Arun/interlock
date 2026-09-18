@@ -1,0 +1,7 @@
+--- a/scheduler.py
++++ b/scheduler.py
+@@ -1,3 +1,3 @@
+ class Scheduler:
+     def start(self, loop, future, completer):
+-        completer.complete(future)
++        loop.call_later(10, completer.complete, future)

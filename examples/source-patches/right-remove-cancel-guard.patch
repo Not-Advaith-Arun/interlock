@@ -1,0 +1,10 @@
+--- a/completion.py
++++ b/completion.py
+@@ -3,7 +3,5 @@
+         self.records = []
+ 
+     def complete(self, future):
+-        if future.cancelled():
+-            return
+         future.set_result("ready")
+         self.records.append({"result": "ready"})

@@ -62,7 +62,7 @@ def _show_report(report: dict) -> None:
         if checked.get("first_mismatch"):
             _show_fixture(checked["first_mismatch"])
         elif checked.get("candidate_replay"):
-            print("  Actual business effects: " + ", ".join(
+            print("  Actual recorded effects: " + ", ".join(
                 f"{version}={len(outcome['effect_records'])}"
                 for version, outcome in checked["candidate_replay"]["observed_outcomes"].items()))
 
@@ -73,9 +73,8 @@ def _show_fixture(result):
     for item in result["trace"]:
         print(f"{item['step']:2} {item['event'] or '(initial)'}")
         for version, outcome in item["observed"].items():
-            print(f"   {version:6} effects={len(outcome['effect_records'])} "
-                  f"requests={outcome['state']['requests']} acks={outcome['state']['acks']} "
-                  f"clock={outcome['clock']}")
+            print(f"   {version:6} {json.dumps(outcome['state'], sort_keys=True)} "
+                  f"effects={len(outcome['effect_records'])} clock={outcome['clock']}")
         for mismatch in item["mismatches"]:
             print(f"   MISMATCH {mismatch['version']}.{mismatch['field']}: "
                   f"expected {mismatch['expected']!r}; observed {mismatch['observed']!r}")

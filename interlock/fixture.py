@@ -8,10 +8,12 @@ from collections import Counter, deque
 from dataclasses import asdict, dataclass
 import hashlib
 from pathlib import Path
+import platform
 
 from .engine import replay
 from .models import MODELS
 from .scenario import VERSIONS, canonical, fingerprint, validate_scenario
+from . import cancellation_fixture as cancellation
 from .fixtures.retry import services
 from .fixtures.retry.base.producer import Producer as BaseProducer
 from .fixtures.retry.base.worker import Worker as BaseWorker
@@ -34,11 +36,16 @@ class Revision:
     producer_path: str
     worker_path: str
 
+    @property
+    def sources(self):
+        return {"producer": self.producer_path, "worker": self.worker_path}
+
 
 @dataclass(frozen=True)
 class Fixture:
     configs: dict
-    revisions: dict[str, Revision]
+    revisions: dict[str, Revision | cancellation.CallbackRevision]
+    model: str = "retry-v1"
 
 
 def _revision(name, producer, worker, worker_name=None):
@@ -65,29 +72,41 @@ FIXED = Fixture(
      "right": _revision("right", RightProducer, FixedWorker, "fixed"),
      "merged": _revision("merged", MergedProducer, FixedWorker, "fixed")},
 )
-FIXTURES = {"retry-conflict": CONFLICT, "retry-fixed": FIXED}
+FIXTURES = {
+    "retry-conflict": CONFLICT, "retry-fixed": FIXED,
+    "cancellation-conflict": Fixture(cancellation.CONFLICT_CONFIGS, cancellation.CONFLICT_REVISIONS,
+                                     "cancellation-v1"),
+    "cancellation-fixed": Fixture(cancellation.FIXED_CONFIGS, cancellation.FIXED_REVISIONS,
+                                  "cancellation-v1"),
+}
 
 
 def validate_fixture(scenario, name):
     validate_scenario(scenario)
     if name not in FIXTURES:
         raise ValueError("fixture must be one of: " + ", ".join(sorted(FIXTURES)))
-    if scenario["model"] != "retry-v1" or scenario["versions"] != FIXTURES[name].configs:
-        raise ValueError(f"fixture {name!r} only supports its exact bundled retry-v1 configurations")
+    if scenario["model"] != FIXTURES[name].model or scenario["versions"] != FIXTURES[name].configs:
+        raise ValueError(f"fixture {name!r} only supports its exact bundled {FIXTURES[name].model} configurations")
     return FIXTURES[name]
 
 
 def source_identity(name):
     """Hash installed bundled source; no path comes from scenario JSON."""
     fixture = FIXTURES[name]
-    paths = {"fixture.py", "models.py", "engine.py", "scenario.py", "fixtures/retry/services.py"}
+    paths = {"fixture.py", "models.py", "engine.py", "scenario.py"}
+    paths.add("cancellation_fixture.py" if fixture.model == "cancellation-v1" else "fixtures/retry/services.py")
     paths.update(path for revision in fixture.revisions.values()
-                 for path in (revision.producer_path, revision.worker_path))
+                 for path in revision.sources.values())
     root = Path(__file__).parent
     files = {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in sorted(paths)}
-    return {"sha256": hashlib.sha256(canonical(files).encode()).hexdigest(), "files": files,
-            "versions": {version: {"producer": revision.producer_path, "worker": revision.worker_path}
-                         for version, revision in fixture.revisions.items()}}
+    identity = {"sha256": hashlib.sha256(canonical(files).encode()).hexdigest(), "files": files,
+                "versions": {version: revision.sources for version, revision in fixture.revisions.items()}}
+    if fixture.model == "cancellation-v1":
+        # The Future comes from the interpreter, not the bundled application.
+        # Record its runtime separately; this is not a hash of the interpreter.
+        identity["runtime"] = {"implementation": platform.python_implementation(),
+                               "python_version": platform.python_version()}
+    return identity
 
 
 def validate_witness_fixture(witness, name):
@@ -164,11 +183,18 @@ class FixtureRuntime:
                 "request_job_ids": [job.job_id for job in self.transport.requests],
                 "ack_job_ids": [ack.job_id for ack in self.transport.acknowledgements]}
 
+    @staticmethod
+    def expected_observations(state):
+        return {"effect_records": [asdict(services.Effect(JOB.job_id, JOB.payload))] * state["effects"],
+                "request_job_ids": [JOB.job_id] * state["requests"],
+                "ack_job_ids": [JOB.job_id] * state["acks"]}
+
 
 def replay_fixture(scenario, events, name):
     fixture = validate_fixture(scenario, name)
     modeled = replay(scenario, events)  # Validates event type, count, and legality.
-    runtimes = {version: FixtureRuntime(fixture.revisions[version]) for version in VERSIONS}
+    runtime_type = cancellation.CancellationRuntime if fixture.model == "cancellation-v1" else FixtureRuntime
+    runtimes = {version: runtime_type(fixture.revisions[version]) for version in VERSIONS}
     trace = []
     first_mismatch = None
     actual_stuttered = []
@@ -191,9 +217,7 @@ def replay_fixture(scenario, events, name):
             expected_values = {
                 "state": expected["state"], "violations": expected["violations"],
                 "enabled": sorted(MODELS[scenario["model"]].enabled(expected["state"], scenario["versions"][version])),
-                "effect_records": [asdict(services.Effect(JOB.job_id, JOB.payload))] * expected["state"]["effects"],
-                "request_job_ids": [JOB.job_id] * expected["state"]["requests"],
-                "ack_job_ids": [JOB.job_id] * expected["state"]["acks"],
+                **runtime_type.expected_observations(expected["state"]),
             }
             for field, value in expected_values.items():
                 if observed[field] != value:
@@ -215,6 +239,7 @@ def replay_fixture(scenario, events, name):
     final = trace[-1]["observed"]
     actual_interaction = not final["merged"]["passed"] and all(final[v]["passed"] for v in VERSIONS[:3])
     return {"format": "interlock-fixture-replay-v1", "fixture": name,
+            "case": cancellation.EVIDENCE if fixture.model == "cancellation-v1" else {"kind": "synthetic"},
             "source_identity": source_identity(name), "scenario_sha256": fingerprint(scenario),
             "events": list(events), "executed_steps": len(trace) - 1,
             "agreement": first_mismatch is None, "first_mismatch": first_mismatch,
@@ -231,7 +256,7 @@ def check_fixture(scenario, name, *, max_depth=8, max_schedules=MAX_FIXTURE_SCHE
     repeated model state can expose hidden implementation history. Each prefix
     starts fresh handler instances. A hard schedule cap reports incomplete work.
     """
-    validate_fixture(scenario, name)
+    fixture = validate_fixture(scenario, name)
     if type(max_depth) is not int or not 0 <= max_depth <= 64:
         raise ValueError("max_depth must be an integer between 0 and 64")
     if type(max_schedules) is not int or not 1 <= max_schedules <= MAX_FIXTURE_SCHEDULES:
@@ -253,6 +278,7 @@ def check_fixture(scenario, name, *, max_depth=8, max_schedules=MAX_FIXTURE_SCHE
             queue.extend(events + (event,) for event in enabled)
     complete = not queue and failure is None
     return {"format": "interlock-fixture-check-v1", "fixture": name,
+            "case": cancellation.EVIDENCE if fixture.model == "cancellation-v1" else {"kind": "synthetic"},
             "status": "fixture_mismatch" if failure else "agreement" if complete else "incomplete",
             "source_identity": source_identity(name), "scenario_sha256": fingerprint(scenario),
             "bounds": {"max_depth": max_depth, "max_schedules": max_schedules},
