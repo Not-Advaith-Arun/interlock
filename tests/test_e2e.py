@@ -111,6 +111,24 @@ class EndToEndTests(unittest.TestCase):
             diagnostic = Path(directory) / "reduced-report.json"
             self.cli("minimize", padded, "--model-only", "--report", diagnostic, "--json")
             self.assertEqual(json.loads(diagnostic.read_text())["format"], "interlock-trace-reduction-v1")
+            diagnostic_bytes = diagnostic.read_bytes()
+            self.cli("replay", diagnostic, "--json", expected=2)
+            self.cli("view-witness", diagnostic, "--model-only", expected=2)
+            preserved_report = Path(directory) / "previous-diagnostic.json"
+            preserved_report.write_text("preserve prior diagnostic")
+            self.cli("minimize", diagnostic, "--model-only", "--report", preserved_report,
+                     "--force", "--json", expected=2)
+            self.assertEqual(preserved_report.read_text(), "preserve prior diagnostic")
+            self.assertEqual(diagnostic.read_bytes(), diagnostic_bytes)
+            exhausted_report = Path(directory) / "budget-diagnostic.json"
+            exhausted = self.cli("minimize", padded, "--model-only", "--max-attempts", "1",
+                                 "--max-diagnostics", "1", "--report", exhausted_report, "--json", expected=3)
+            self.assertEqual(json.loads(exhausted_report.read_text()), exhausted)
+            self.assertEqual(exhausted["status"], "budget_exhausted")
+            self.assertFalse(exhausted["one_event_deletion_minimal"])
+            self.assertTrue(exhausted["replay"]["interaction_reproduced"])
+            self.cli("replay", exhausted_report, "--json", expected=2)
+            self.assertEqual(padded.read_bytes(), padded_bytes)
             tampered = json.loads(original)
             tampered["events"].append("acknowledge:a:1")
             invalid = Path(directory) / "invalid-witness.json"
