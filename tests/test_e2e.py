@@ -178,6 +178,37 @@ class EndToEndTests(unittest.TestCase):
                      "--force", "--json", expected=2)
             self.assertEqual(witness.read_bytes(), original)
 
+    def test_schedule_comparison_locates_event_divergence_and_ended_prefix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scenario = json.loads((ROOT / "examples/multi_job_retry_conflict.json").read_text())
+            base = {"format": "interlock-witness-v1", "scenario": scenario,
+                    "scenario_sha256": fingerprint(scenario)}
+            left, right, prefix = [root / name for name in ("left.json", "right.json", "prefix.json")]
+            common = ["submit:a", "deliver:a:0"]
+            for path, events in ((left, common + ["acknowledge:a:0"]),
+                                 (right, common + ["drop_ack:a:0"]), (prefix, common)):
+                path.write_text(json.dumps({**base, "events": events}))
+            originals = {p: p.read_bytes() for p in (left, right, prefix)}
+            compared = self.cli("compare-witnesses", left, right, "--model-only")
+            first = compared["first_event_difference"]
+            self.assertEqual(first["event_number"], 3)
+            self.assertEqual(first["left"]["event"], "acknowledge:a:0")
+            self.assertEqual(first["right"]["event"], "drop_ack:a:0")
+            self.assertFalse(first["left"]["ended"] or first["right"]["ended"])
+            for side, path in (("left", left), ("right", right)):
+                replayed = self.cli("replay", path, "--json")
+                self.assertEqual(first[side]["outcomes"], replayed["trace"][-1]["outcomes"])
+            ended = self.cli("compare-witnesses", prefix, left, "--model-only")["first_event_difference"]
+            self.assertTrue(ended["left"]["ended"])
+            self.assertIsNone(ended["left"]["event"])
+            self.assertEqual(ended["left"]["outcomes"], self.cli("replay", prefix, "--json")["trace"][-1]["outcomes"])
+            swapped = self.cli("compare-witnesses", left, prefix, "--model-only")["first_event_difference"]
+            self.assertEqual(swapped["left"], ended["right"])
+            self.assertEqual(swapped["right"], ended["left"])
+            self.assertIsNone(self.cli("compare-witnesses", left, left, "--model-only")["first_event_difference"])
+            self.assertEqual({p: p.read_bytes() for p in originals}, originals)
+
     def test_incomplete_or_individually_unsafe_search_cannot_publish_witness(self):
         with tempfile.TemporaryDirectory() as directory:
             witness = Path(directory) / "witness.json"
