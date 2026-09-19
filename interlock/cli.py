@@ -179,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     sweep.add_argument("scenario")
     sweep.add_argument("--depth", type=int, action="append", required=True)
     sweep.add_argument("--max-states", type=int, default=5000)
+    sweep.add_argument("--profile", action="store_true", help="Measure each search on Linux; RSS is the process-lifetime high-water mark")
     sweep.add_argument("--model-only", action="store_true", required=True)
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated model schedules without executing imported code")
     comparison.add_argument("left")
@@ -205,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "sweep-depths":
             from .depth_sweep import sweep_depths
-            result = sweep_depths(read_json(args.scenario), args.depth, args.max_states)
+            result = sweep_depths(read_json(args.scenario), args.depth, args.max_states, profile=args.profile)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
         if args.command == "compare-witnesses":

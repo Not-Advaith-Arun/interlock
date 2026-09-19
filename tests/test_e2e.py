@@ -37,6 +37,17 @@ class EndToEndTests(unittest.TestCase):
             self.assertIsNone(sweep["results"][0]["candidate_events"])
             self.assertTrue(sweep["results"][1]["candidate_events"])
             self.assertEqual(sweep["execution_scope"], "model_only")
+            self.assertTrue(all("measurements" not in row for row in sweep["results"]))
+            if sys.platform.startswith("linux"):
+                measured = self.cli("sweep-depths", scenario, "--depth", "0", "--depth", "12",
+                                    "--model-only", "--profile", expected=1)
+                for actual, baseline in zip(measured["results"], sweep["results"]):
+                    metrics = actual.pop("measurements")
+                    self.assertEqual(actual, baseline)
+                    self.assertGreaterEqual(metrics["wall_seconds"], 0)
+                    self.assertGreaterEqual(metrics["process_cpu_seconds"], 0)
+                    self.assertGreater(metrics["process_peak_rss_bytes"], 0)
+                    self.assertIn("process-lifetime", metrics["scope"])
             self.cli("sweep-depths", scenario, "--depth", "1", "--depth", "1", "--model-only", expected=2)
             self.cli("sweep-depths", scenario, "--depth", "1", "--max-states", "200001", "--model-only", expected=2)
             self.assertEqual(scenario.read_bytes(), scenario_bytes)
