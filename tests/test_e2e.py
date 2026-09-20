@@ -178,6 +178,30 @@ class EndToEndTests(unittest.TestCase):
                      "--force", "--json", expected=2)
             self.assertEqual(witness.read_bytes(), original)
 
+    def test_compact_replay_preserves_model_and_handler_outcomes_without_trace_states(self):
+        with tempfile.TemporaryDirectory() as directory:
+            witness = Path(directory) / "witness.json"
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", "multi-job-retry-conflict",
+                     "--witness", witness, "--json", expected=1)
+            original = witness.read_bytes()
+            for flag, value, fixture in (("--model-only", None, False), ("--fixture", "multi-job-retry-conflict", True)):
+                mode = (flag, value) if value else (flag,)
+                full = self.cli("replay", witness, *mode, "--json", expected=1)
+                summary = self.cli("replay", witness, *mode, "--summary", expected=1)
+                outcomes = full["observed_outcomes"] if fixture else full["outcomes"]
+                self.assertEqual(summary["versions"], {name: {"passed": row["passed"], "violations": row["violations"]}
+                                                      for name, row in outcomes.items()})
+                self.assertEqual(summary["event_count"], len(json.loads(original)["events"]))
+                self.assertEqual(summary["interaction_reproduced"], full["interaction_reproduced"])
+                self.assertEqual(summary["execution_scope"], "bundled_handlers" if fixture else "model_only")
+                self.assertEqual(summary["source_verification"], "verified" if fixture else "not_checked")
+                self.assertNotIn("trace", summary)
+                self.assertTrue(all(set(row) == {"passed", "violations"} for row in summary["versions"].values()))
+                if fixture:
+                    self.assertTrue(summary["agreement"])
+            self.cli("replay", witness, "--summary", expected=2)
+            self.assertEqual(witness.read_bytes(), original)
+
     def test_complete_reduction_exports_explicit_model_only_witness(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

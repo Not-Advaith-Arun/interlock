@@ -62,6 +62,18 @@ def _validate_outputs(source: str | None, outputs: list[str], force: bool) -> No
             raise ValueError(f"output already exists: {path}; choose a fresh path or use --force")
 
 
+def _replay_summary(witness, result, *, fixture=False):
+    outcomes = result["observed_outcomes"] if fixture else result["outcomes"]
+    return {"scenario_sha256": witness["scenario_sha256"], "event_count": len(witness["events"]),
+            "interaction_reproduced": result["interaction_reproduced"],
+            "execution_scope": "bundled_handlers" if fixture else "model_only",
+            "source_verification": result.get("source_verification", "not_checked"),
+            **({"agreement": result["agreement"]} if fixture else {}),
+            "versions": {name: {"passed": row["passed"], "violations": row["violations"]}
+                         for name, row in outcomes.items()},
+            "scope": "Full requested replay performed; detailed states and trace omitted from this summary. This event sequence only, not full search bounds, global branch safety or shortest failure. Output reduction does not bound replay cost."}
+
+
 def _show_report(report: dict) -> None:
     print(f"Interlock · {report['name']}")
     print(f"Result: {report['status']}")
@@ -170,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     reproduce = commands.add_parser("replay", help="Replay a self-contained witness")
     reproduce.add_argument("witness")
     reproduce.add_argument("--json", action="store_true")
+    reproduce.add_argument("--summary", action="store_true", help="Emit compact JSON outcomes without detailed trace/state; perform the same full requested replay")
     replay_mode = reproduce.add_mutually_exclusive_group()
     replay_mode.add_argument("--fixture", choices=sorted(FIXTURES),
                            help="Opt in to replaying this witness against trusted bundled handlers")
@@ -357,7 +370,9 @@ def main(argv: list[str] | None = None) -> int:
             provenance = validate_witness_fixture(witness, args.fixture)
             result = replay_fixture(witness["scenario"], witness["events"], args.fixture)
             result["source_verification"] = provenance
-            if args.json:
+            if args.summary:
+                print(json.dumps(_replay_summary(witness, result, fixture=True), indent=2, sort_keys=True))
+            elif args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
                 print("Fixture source identity: " + provenance)
@@ -367,7 +382,9 @@ def main(argv: list[str] | None = None) -> int:
         result["execution_scope"] = "model_only"
         if "fixture" in witness:
             result["source_verification"] = "not_checked"
-        if args.json:
+        if args.summary:
+            print(json.dumps(_replay_summary(witness, result), indent=2, sort_keys=True))
+        elif args.json:
             print(json.dumps(result, indent=2, sort_keys=True))
         else:
             if "fixture" in witness:
