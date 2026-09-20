@@ -178,6 +178,48 @@ class EndToEndTests(unittest.TestCase):
                      "--force", "--json", expected=2)
             self.assertEqual(witness.read_bytes(), original)
 
+    def test_complete_reduction_exports_explicit_model_only_witness(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pinned, padded, exported, diagnostic = [root / name for name in
+                ("pinned.json", "padded.json", "reduced.json", "diagnostic.json")]
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", "multi-job-retry-conflict",
+                     "--witness", pinned, "--json", expected=1)
+            original = json.loads(pinned.read_text())
+            imported = {key: original[key] for key in ("scenario", "scenario_sha256", "events")}
+            imported["format"] = "interlock-witness-v1"
+            imported["events"] = imported["events"] + ["acknowledge:a:1"]
+            padded.write_text(json.dumps(imported))
+            originals = {p: p.read_bytes() for p in (padded, pinned)}
+            result = self.cli("minimize", padded, "--model-only", "--model-witness", exported,
+                              "--report", diagnostic, "--json")
+            self.assertTrue(result["one_event_deletion_minimal"])
+            self.assertGreater(result["removed_events"], 0)
+            witness = json.loads(exported.read_text())
+            self.assertEqual(witness["format"], "interlock-witness-v1")
+            self.assertEqual(set(witness), {"format", "scenario", "scenario_sha256", "events"})
+            self.assertEqual(witness["events"], result["reduced_events"])
+            replayed = self.cli("replay", exported, "--model-only", "--json", expected=1)
+            self.assertTrue(replayed["interaction_reproduced"])
+            self.assertEqual(replayed["execution_scope"], "model_only")
+            self.assertNotEqual(replayed.get("source_verification"), "verified")
+            self.assertIn("Execution: model_only", self.cli("view-witness", exported, "--model-only"))
+            saved = exported.read_bytes()
+            self.cli("minimize", padded, "--model-only", "--max-attempts", "1", "--model-witness", exported,
+                     "--report", diagnostic, "--force", "--json", expected=3)
+            self.assertEqual(exported.read_bytes(), saved)
+            self.assertEqual(json.loads(diagnostic.read_text())["status"], "budget_exhausted")
+            diagnostic_bytes = diagnostic.read_bytes()
+            self.cli("minimize", pinned, "--fixture", "multi-job-retry-conflict", "--model-witness", exported,
+                     "--report", diagnostic, "--force", "--json", expected=2)
+            self.assertEqual(exported.read_bytes(), saved)
+            self.assertEqual(diagnostic.read_bytes(), diagnostic_bytes)
+            for output in (padded, diagnostic):
+                self.cli("minimize", padded, "--model-only", "--model-witness", output,
+                         "--report", diagnostic, "--force", "--json", expected=2)
+            self.assertEqual({p: p.read_bytes() for p in originals}, originals)
+            self.assertEqual(diagnostic.read_bytes(), diagnostic_bytes)
+
     def test_rehashed_witness_with_false_source_binding_cannot_claim_handler_verification(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

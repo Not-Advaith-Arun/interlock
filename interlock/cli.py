@@ -195,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     minimize.add_argument("--max-diagnostics", type=int, default=0, help="Retain the first 0..1000 removal decisions without changing reduction")
     minimize.add_argument("--json", action="store_true")
     minimize.add_argument("--report", help="Write a diagnostic report, not a publishable witness")
+    minimize.add_argument("--model-witness", help="Export a replayable v1 witness only after complete reduction; requires --model-only and makes no source verification claim")
     minimize.add_argument("--force", action="store_true")
     view = commands.add_parser("view-witness", help="Export a static four-version replay review as HTML to stdout")
     view.add_argument("witness")
@@ -230,11 +231,23 @@ def main(argv: list[str] | None = None) -> int:
             return 4 if result.get("agreement") is False else 0
         if args.command == "minimize":
             from .reduction import reduce_witness
-            _validate_outputs(args.witness, [args.report] if args.report else [], args.force)
+            if args.model_witness and not args.model_only:
+                raise ValueError("model witness export requires explicit --model-only")
+            _validate_outputs(args.witness, [p for p in (args.report, args.model_witness) if p], args.force)
             witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
             result = reduce_witness(witness, args.max_attempts, fixture=args.fixture, max_diagnostics=args.max_diagnostics)
+            exported = None
+            if args.model_witness and result["one_event_deletion_minimal"]:
+                exported = {"format": "interlock-witness-v1", "scenario": witness["scenario"],
+                            "scenario_sha256": result["scenario_sha256"], "events": result["reduced_events"]}
+                if not replay_witness(exported)["interaction_reproduced"]:
+                    raise ValueError("reduced model witness no longer reproduces the interaction")
+                if len((canonical(exported) + "\n").encode("utf-8")) > MAX_WITNESS_BYTES:
+                    raise ValueError("reduced model witness exceeds the witness byte limit")
             if args.report:
                 _write(args.report, result, args.force)
+            if exported is not None:
+                _write(args.model_witness, exported, args.force, compact=True, max_bytes=MAX_WITNESS_BYTES)
             if args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
