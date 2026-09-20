@@ -178,6 +178,31 @@ class EndToEndTests(unittest.TestCase):
                      "--force", "--json", expected=2)
             self.assertEqual(witness.read_bytes(), original)
 
+    def test_rehashed_witness_with_false_source_binding_cannot_claim_handler_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scenario = ROOT / "examples/multi_job_retry_conflict.json"
+            original, forged = root / "original.json", root / "forged.json"
+            self.cli("check", scenario, "--fixture", "multi-job-retry-conflict", "--witness", original,
+                     "--json", expected=1)
+            witness = json.loads(original.read_text())
+            saved = original.read_bytes()
+            witness["fixture"]["source_identity"]["deliberately_false_binding"] = "Untrusted source identity"
+            witness["witness_sha256"] = fingerprint({k:v for k,v in witness.items() if k != "witness_sha256"})
+            forged.write_text(json.dumps(witness))
+            forged_bytes = forged.read_bytes()
+            self.cli("replay", forged, "--fixture", "multi-job-retry-conflict", "--json", expected=2)
+            self.cli("view-witness", forged, "--fixture", "multi-job-retry-conflict", expected=2)
+            modeled = self.cli("replay", forged, "--model-only", "--json", expected=1)
+            self.assertTrue(modeled["interaction_reproduced"])
+            self.assertEqual(modeled["source_verification"], "not_checked")
+            view = self.cli("view-witness", forged, "--model-only")
+            self.assertIn("Execution: model_only; source identity: not_checked", view)
+            self.assertNotIn("source identity: verified", view)
+            self.assertNotIn("Untrusted source identity", view)
+            self.assertEqual(original.read_bytes(), saved)
+            self.assertEqual(forged.read_bytes(), forged_bytes)
+
     def test_schedule_comparison_locates_event_divergence_and_ended_prefix(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
