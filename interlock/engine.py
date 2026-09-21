@@ -169,7 +169,8 @@ def make_witness(scenario: dict, report: dict) -> dict:
     return witness
 
 
-def replay_witness(witness: Any) -> dict:
+def validate_witness(witness: Any) -> None:
+    """Validate envelope/configuration identity without running a schedule."""
     if not isinstance(witness, dict):
         raise ValueError("unsupported witness format")
     fields = {"format", "scenario", "scenario_sha256", "events"}
@@ -190,4 +191,12 @@ def replay_witness(witness: Any) -> dict:
     validate_scenario(witness["scenario"])
     if witness["scenario_sha256"] != fingerprint(witness["scenario"]):
         raise ValueError("scenario fingerprint does not match witness")
+    if not isinstance(witness["events"], (list,tuple)) or len(witness["events"]) > 1000:
+        raise ValueError("events must be a list containing at most 1000 event names")
+    if any(not isinstance(event,str) for event in witness["events"]):
+        raise ValueError("event names must be strings")
+
+
+def replay_witness(witness: Any) -> dict:
+    validate_witness(witness)
     return replay(witness["scenario"], witness["events"])

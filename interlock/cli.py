@@ -212,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
     scenarios = commands.add_parser("compare-scenarios", help="Compare declared configuration changes without executing or assessing safety")
     scenarios.add_argument("left")
     scenarios.add_argument("right")
+    inspection = commands.add_parser("inspect-witness", help="Inspect witness structure/counts/fingerprints without replay or source verification")
+    inspection.add_argument("witness")
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated schedules with explicit model or trusted bundled-handler scope")
     comparison.add_argument("left")
     comparison.add_argument("right")
@@ -253,6 +255,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "compare-scenarios":
             from .scenario_comparison import compare_scenarios
             print(json.dumps(compare_scenarios(read_json(args.left), read_json(args.right)), indent=2, sort_keys=True))
+            return 0
+        if args.command == "inspect-witness":
+            from .witness_inspection import inspect_witness
+            print(json.dumps(inspect_witness(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES)),indent=2,sort_keys=True))
             return 0
         if args.command == "compare-witnesses":
             from .witness_comparison import compare_witnesses
