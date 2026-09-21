@@ -244,6 +244,53 @@ class EndToEndTests(unittest.TestCase):
             self.assertEqual({p: p.read_bytes() for p in originals}, originals)
             self.assertEqual(diagnostic.read_bytes(), diagnostic_bytes)
 
+    def test_imported_provenance_paths_and_model_names_never_execute_external_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pinned, imported = root / "pinned.json", root / "imported.json"
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", "multi-job-retry-conflict",
+                     "--witness", pinned, "--json", expected=1)
+            marker, module = root / "must-not-exist", root / "untrusted.py"
+            module.write_text("from pathlib import Path\nPath(" + repr(str(marker)) + ").write_text('executed')\n")
+            fifo = root / "source-fifo.py"
+            os.mkfifo(fifo)
+            guard_code = ("import builtins,io,os,sys; from pathlib import Path; from unittest.mock import patch; from interlock.cli import main\n"
+                          "forbidden=Path(sys.argv.pop(1)).resolve(); marker=Path(sys.argv.pop(1))\n"
+                          "def trap(original):\n"
+                          " def guarded(path,*args,**kwargs):\n"
+                          "  if isinstance(path,(str,bytes,os.PathLike)) and Path(os.fsdecode(path)).resolve()==forbidden:\n"
+                          "   marker.write_text('opened'); raise ValueError('untrusted source opened')\n"
+                          "  return original(path,*args,**kwargs)\n"
+                          " return guarded\n"
+                          "with patch('builtins.open',trap(builtins.open)),patch('io.open',trap(io.open)),patch('os.open',trap(os.open)):\n"
+                          " raise SystemExit(main())\n")
+            def guarded(path, *args, expected):
+                result = subprocess.run([sys.executable, "-c", guard_code, str(path), str(marker), *map(str,args)],
+                                        cwd=ROOT, capture_output=True, text=True, timeout=3)
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                self.assertFalse(marker.exists(), "Supplied source was opened or executed")
+            original = pinned.read_bytes()
+            for path in (module, fifo):
+                value = json.loads(original)
+                value["fixture"]["source_identity"]["files"] = {str(path): "0" * 64}
+                value["witness_sha256"] = fingerprint({k:v for k,v in value.items() if k != "witness_sha256"})
+                imported.write_text(json.dumps(value))
+                saved = imported.read_bytes()
+                guarded(path, "replay", imported, "--fixture", "multi-job-retry-conflict", "--json", expected=2)
+                guarded(path, "view-witness", imported, "--fixture", "multi-job-retry-conflict", expected=2)
+                guarded(path, "replay", imported, "--model-only", "--json", expected=1)
+                self.assertFalse(marker.exists())
+                self.assertEqual(imported.read_bytes(), saved)
+            value = json.loads(original)
+            value["scenario"]["model"] = str(module)
+            value["scenario_sha256"] = fingerprint(value["scenario"])
+            value["witness_sha256"] = fingerprint({k:v for k,v in value.items() if k != "witness_sha256"})
+            imported.write_text(json.dumps(value))
+            guarded(module, "replay", imported, "--model-only", "--json", expected=2)
+            self.assertFalse(marker.exists())
+            self.assertTrue(fifo.exists())
+            self.assertEqual(pinned.read_bytes(), original)
+
     def test_rehashed_witness_with_false_source_binding_cannot_claim_handler_verification(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
