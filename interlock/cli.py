@@ -188,12 +188,15 @@ def main(argv: list[str] | None = None) -> int:
                            help="Opt in to replaying this witness against trusted bundled handlers")
     replay_mode.add_argument("--model-only", action="store_true",
                              help="Replay only the embedded model, without checking pinned fixture sources")
-    sweep = commands.add_parser("sweep-depths", help="Compare bounded model searches at explicitly selected depths")
+    sweep = commands.add_parser("sweep-depths", help="Compare bounded model/optional bundled-handler checks at selected depths")
     sweep.add_argument("scenario")
     sweep.add_argument("--depth", type=int, action="append", required=True)
     sweep.add_argument("--max-states", type=int, default=5000)
     sweep.add_argument("--profile", action="store_true", help="Measure each search on Linux; RSS is the process-lifetime high-water mark")
-    sweep.add_argument("--model-only", action="store_true", required=True)
+    sweep_mode = sweep.add_mutually_exclusive_group(required=True)
+    sweep_mode.add_argument("--model-only", action="store_true")
+    sweep_mode.add_argument("--fixture", choices=sorted(FIXTURES), help="Explicit trusted bundled handlers, checked at each bound")
+    sweep.add_argument("--max-schedules", type=int, help="Per-depth handler prefix budget; requires --fixture")
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated schedules with explicit model or trusted bundled-handler scope")
     comparison.add_argument("left")
     comparison.add_argument("right")
@@ -222,7 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "sweep-depths":
             from .depth_sweep import sweep_depths
-            result = sweep_depths(read_json(args.scenario), args.depth, args.max_states, profile=args.profile)
+            result = sweep_depths(read_json(args.scenario), args.depth, args.max_states, profile=args.profile,
+                                  fixture=args.fixture, max_schedules=args.max_schedules)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
         if args.command == "compare-witnesses":

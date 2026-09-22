@@ -402,6 +402,32 @@ class EndToEndTests(unittest.TestCase):
             self.assertFalse(witness.exists())
 
 
+    def test_handler_depth_sweep_retains_each_independent_check_and_prefix_budget(self):
+        scenario = ROOT / "examples/multi_job_retry_conflict.json"
+        original = scenario.read_bytes()
+        fixture = "multi-job-retry-conflict"
+        swept = self.cli("sweep-depths", scenario, "--fixture", fixture, "--depth", "0", "--depth", "2")
+        self.assertEqual(swept["execution_scope"], "bundled_handlers")
+        self.assertFalse(swept["any_incomplete"])
+        for row in swept["results"]:
+            full = self.cli("check", scenario, "--fixture", fixture, "--max-depth", row["depth"],
+                            "--max-states", "5000", "--json")
+            for key in ("status", "model_status", "bounds", "coverage", "versions", "fixture"):
+                self.assertEqual(row[key], full[key])
+            self.assertTrue(row["fixture"]["coverage"]["complete_up_to_depth"])
+            self.assertIn("source_identity", row["fixture"])
+        limited = self.cli("sweep-depths", scenario, "--fixture", fixture, "--depth", "0", "--depth", "2",
+                           "--max-schedules", "1", expected=3)
+        self.assertTrue(limited["any_incomplete"])
+        shallow, bounded = limited["results"]
+        self.assertEqual(shallow["fixture"]["status"], "agreement")
+        self.assertEqual(bounded["status"], "incomplete")
+        self.assertEqual(bounded["fixture"]["coverage"]["termination_reason"], "schedule_budget")
+        self.assertFalse(bounded["fixture"]["coverage"]["complete_up_to_depth"])
+        self.cli("sweep-depths", scenario, "--model-only", "--depth", "0", "--max-schedules", "1", expected=2)
+        self.cli("sweep-depths", scenario, "--fixture", fixture, "--depth", "0", "--max-schedules", "0", expected=2)
+        self.assertEqual(scenario.read_bytes(), original)
+
     def test_depth_budget_exhaustion_cannot_be_reported_as_a_safe_sweep(self):
         scenario = ROOT / "examples/multi_job_retry_conflict.json"
         before = scenario.read_bytes()
