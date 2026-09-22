@@ -194,10 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     sweep.add_argument("--max-states", type=int, default=5000)
     sweep.add_argument("--profile", action="store_true", help="Measure each search on Linux; RSS is the process-lifetime high-water mark")
     sweep.add_argument("--model-only", action="store_true", required=True)
-    comparison = commands.add_parser("compare-witnesses", help="Compare two validated model schedules without executing imported code")
+    comparison = commands.add_parser("compare-witnesses", help="Compare two validated schedules with explicit model or trusted bundled-handler scope")
     comparison.add_argument("left")
     comparison.add_argument("right")
-    comparison.add_argument("--model-only", required=True, action="store_true")
+    compare_mode = comparison.add_mutually_exclusive_group(required=True)
+    compare_mode.add_argument("--model-only", action="store_true")
+    compare_mode.add_argument("--fixture", choices=sorted(FIXTURES), help="Opt in to both schedules' trusted bundled handlers; imported code is never executed")
     minimize = commands.add_parser("minimize", help="Reduce an imported trace with explicit model-only or pinned bundled-handler scope")
     minimize.add_argument("witness")
     reduction_mode = minimize.add_mutually_exclusive_group(required=True)
@@ -225,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
         if args.command == "compare-witnesses":
             from .witness_comparison import compare_witnesses
-            result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES))
+            result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES), fixture=args.fixture)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0
         if args.command == "view-witness":

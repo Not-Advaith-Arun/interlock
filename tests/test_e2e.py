@@ -347,6 +347,48 @@ class EndToEndTests(unittest.TestCase):
             self.assertIsNone(self.cli("compare-witnesses", left, left, "--model-only")["first_event_difference"])
             self.assertEqual({p: p.read_bytes() for p in originals}, originals)
 
+    def test_explicit_handler_comparison_matches_replay_and_preflights_both_bindings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            complete, prefix, forged = (root / name for name in ("complete.json", "prefix.json", "forged.json"))
+            fixture = "multi-job-retry-conflict"
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", fixture,
+                     "--witness", complete, "--json", expected=1)
+            value = json.loads(complete.read_text())
+            shorter = {**value, "events": value["events"][:-1]}
+            shorter["witness_sha256"] = fingerprint({k:v for k,v in shorter.items() if k != "witness_sha256"})
+            prefix.write_text(json.dumps(shorter))
+            originals = {p: p.read_bytes() for p in (complete, prefix)}
+            compared = self.cli("compare-witnesses", prefix, complete, "--fixture", fixture)
+            left = self.cli("replay", prefix, "--fixture", fixture, "--json")
+            right = self.cli("replay", complete, "--fixture", fixture, "--json", expected=1)
+            self.assertEqual(compared["execution_scope"], "bundled_handlers")
+            self.assertEqual(compared["source_verification"], {"left": "verified", "right": "verified"})
+            self.assertEqual(compared["model_agreement"], {"left": True, "right": True})
+            divergence = compared["first_event_difference"]
+            self.assertTrue(divergence["left"]["ended"])
+            self.assertEqual(divergence["left"]["outcomes"], left["observed_outcomes"])
+            self.assertEqual(divergence["right"]["outcomes"], right["observed_outcomes"])
+            self.assertEqual(compared["final_outcome_changes"],
+                             [{"version": key, "left": left["observed_outcomes"][key], "right": right["observed_outcomes"][key]}
+                              for key in ("base", "left", "right", "merged")
+                              if left["observed_outcomes"][key] != right["observed_outcomes"][key]])
+            self.assertIsNone(self.cli("compare-witnesses", complete, complete, "--fixture", fixture)["first_event_difference"])
+            bad = json.loads(complete.read_text())
+            bad["fixture"]["source_identity"]["sha256"] = "0" * 64
+            bad["witness_sha256"] = fingerprint({k:v for k,v in bad.items() if k != "witness_sha256"})
+            forged.write_text(json.dumps(bad))
+            # Failure of the second binding must precede execution even of the valid first witness.
+            guarded = ("import sys; from unittest.mock import patch; from interlock.cli import main\n"
+                       "with patch('interlock.fixture.replay_fixture',side_effect=SystemExit(90)):\n"
+                       " raise SystemExit(main())\n")
+            result = subprocess.run([sys.executable, "-c", guarded, "compare-witnesses", str(complete), str(forged),
+                                     "--fixture", fixture], cwd=ROOT, capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("source identity does not match", result.stderr)
+            self.cli("compare-witnesses", complete, complete, expected=2)
+            self.assertEqual({p: p.read_bytes() for p in originals}, originals)
+
     def test_incomplete_or_individually_unsafe_search_cannot_publish_witness(self):
         with tempfile.TemporaryDirectory() as directory:
             witness = Path(directory) / "witness.json"
