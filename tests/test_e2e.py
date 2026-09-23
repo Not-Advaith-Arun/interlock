@@ -428,6 +428,33 @@ class EndToEndTests(unittest.TestCase):
         self.cli("sweep-depths", scenario, "--fixture", fixture, "--depth", "0", "--max-schedules", "0", expected=2)
         self.assertEqual(scenario.read_bytes(), original)
 
+    def test_actual_report_sync_and_replace_failures_preserve_prior_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scenario = ROOT / "examples/retry_safe.json"
+            original = scenario.read_bytes()
+            report = root / "reviewed-report.json"
+            prior = b"Original independently retained report\n"
+            for operation in ("fsync", "replace"):
+                report.write_bytes(prior)
+                injected = ("import sys; from unittest.mock import patch; from interlock.cli import main\n"
+                            "operation=sys.argv.pop(1)\n"
+                            "with patch('interlock.cli.os.'+operation,side_effect=OSError('synthetic publication failure')):\n"
+                            " raise SystemExit(main())\n")
+                result = subprocess.run([sys.executable, "-c", injected, operation, "check", str(scenario),
+                                         "--max-depth", "0", "--report", str(report), "--force", "--json"],
+                                        cwd=ROOT, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("synthetic publication failure", result.stderr)
+                self.assertEqual(report.read_bytes(), prior)
+                self.assertEqual(list(root.glob(".*.tmp")), [])
+                self.assertEqual(scenario.read_bytes(), original)
+            completed = self.cli("check", scenario, "--max-depth", "0", "--report", report, "--force", "--json")
+            self.assertEqual(json.loads(report.read_text()), completed)
+            self.assertEqual(completed["status"], "no_interaction_within_bound")
+            self.assertEqual(list(root.glob(".*.tmp")), [])
+            self.assertEqual(scenario.read_bytes(), original)
+
     def test_depth_budget_exhaustion_cannot_be_reported_as_a_safe_sweep(self):
         scenario = ROOT / "examples/multi_job_retry_conflict.json"
         before = scenario.read_bytes()
