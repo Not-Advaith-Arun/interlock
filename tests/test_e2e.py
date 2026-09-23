@@ -20,6 +20,23 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout) if result.stdout.lstrip().startswith("{") else result.stdout
 
+    def test_untrusted_scenario_title_cannot_emit_terminal_controls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, report = root / "scenario.json", root / "report.json"
+            value = self.cli("example","retry-fixed")
+            value["name"] = "Readable 🧭\x1b]52;c;ZmFrZQ==\x07\rhidden\x9b2J"
+            source.write_text(json.dumps(value))
+            original = source.read_bytes()
+            shown = self.cli("check",source,"--max-depth","0","--report",report)
+            for control in ("\x1b","\x07","\r","\x9b"):
+                self.assertNotIn(control,shown)
+            self.assertIn("\\x1b",shown)
+            self.assertIn("Readable 🧭",shown)
+            self.assertEqual(json.loads(report.read_text())["name"],value["name"])
+            self.assertEqual(self.cli("check",source,"--max-depth","0","--json")["name"],value["name"])
+            self.assertEqual(source.read_bytes(),original)
+
     def test_ambiguous_json_witnesses_fail_before_replay_or_artifact_replacement(self):
         # Ambiguous serialized identities are a security boundary. Exercise real
         # CLI intake rather than only the duplicate-key parser in isolation.

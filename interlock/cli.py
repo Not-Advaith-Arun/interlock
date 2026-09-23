@@ -78,8 +78,14 @@ def _replay_summary(witness, result, *, fixture=False):
             "scope": "Full requested replay performed; detailed states and trace omitted from this summary. This event sequence only, not full search bounds, global branch safety or shortest failure. Output reduction does not bound replay cost."}
 
 
+def _terminal_text(text: str) -> str:
+    """Keep untrusted titles/diagnostics from emitting C0/C1 terminal controls."""
+    return "".join(f"\\x{ord(character):02x}" if (ord(character) < 32 and character not in "\t\n")
+                   or 127 <= ord(character) <= 159 else character for character in text)
+
+
 def _show_report(report: dict) -> None:
-    print(f"Interlock · {report['name']}")
+    print(_terminal_text(f"Interlock · {report['name']}"))
     print(f"Result: {report['status']}")
     coverage = report["coverage"]
     print(f"Explored {coverage['states_explored']} product states, "
@@ -436,5 +442,5 @@ def main(argv: list[str] | None = None) -> int:
             print("Replay covers this event sequence only; it does not recheck the full search bound.")
         return int(any(not outcome["passed"] for outcome in result["outcomes"].values()))
     except (ValueError, OSError, UnicodeError, RecursionError) as exc:
-        print(f"interlock: {exc}", file=sys.stderr)
+        print(_terminal_text(f"interlock: {exc}"), file=sys.stderr)
         return 2
