@@ -184,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     cases.add_argument("--case", action="append", help="Run only these existing case IDs; full manifest still validates")
     cases.add_argument("--max-depth", type=int, default=8)
     cases.add_argument("--max-states", type=int, default=25000)
+    cases.add_argument("--summary", action="store_true", help="Print classification summary only; --report still saves complete evidence")
     cases.add_argument("--report")
     cases.add_argument("--force", action="store_true")
     batch = commands.add_parser("check-many", help="Check1..8 explicit scenario files in model-only scope with separate coverage and bounded total requested states")
@@ -394,12 +395,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(scenario, indent=2, sort_keys=True))
             return 0
         if args.command == "check-cases":
-            from .model_cases import check_cases
+            from .model_cases import check_cases, cases_summary
             _validate_outputs(args.manifest, [args.report] if args.report else [], args.force)
             result = check_cases(read_json(args.manifest), max_depth=args.max_depth, max_states=args.max_states, selected_ids=args.case)
             if args.report:
                 _write(args.report, result, args.force)
-            print(json.dumps(result, indent=2, sort_keys=True))
+            print(json.dumps(cases_summary(result) if args.summary else result, indent=2, sort_keys=True))
             return {"passed":0,"unexpected":1,"incomplete":3}[result["status"]]
         if args.command == "check-many":
             from .model_batch import check_many

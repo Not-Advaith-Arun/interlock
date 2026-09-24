@@ -45,3 +45,14 @@ def check_cases(manifest, *, max_depth=8, max_states=25000, selected_ids=None):
             "selected_case_ids":[case["id"] for case in cases],"manifest_cases":len(manifest["cases"]),
             "omitted_cases":len(manifest["cases"])-len(cases),
             "scope":"Omitted cases are not executed or assessed; all declarations still validate. Caller-supplied expected bounded model classifications only. Passing means observations matched expectations, including explicitly expected unsafe baseline/branch cases; it is not a safety verdict. Incomplete searches never pass and cannot be configured as expected success. Each full model report retains independent branch results and coverage. No handlers, source pins, imported code, witness publication or general safety proof."}
+
+
+def cases_summary(report):
+    """Summarize a freshly checked result; never reinterpret expectations as safety."""
+    return {"format":"interlock-model-cases-summary-v1","status":report["status"],
+            "execution_scope":report["execution_scope"],"source_verification":report["source_verification"],
+            "manifest_cases":report["manifest_cases"],"omitted_cases":report["omitted_cases"],
+            "cases":[{"id":row["id"],"scenario_sha256":row["scenario_sha256"],
+                      "expected_status":row["expected_status"],"observed_status":row["report"]["status"],
+                      "verdict":row["verdict"]} for row in report["cases"]],
+            "scope":"Summary of this model-only run, not independently verified input. Full search reports, schedules and state details omitted; use --report for complete evidence. Expected failures matching classifications are not safety success. Omitted cases unassessed and incomplete searches never pass."}
