@@ -179,6 +179,12 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--force", action="store_true", help="Allow replacement of existing output files")
     check.add_argument("--fixture", choices=sorted(FIXTURES),
                        help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
+    batch = commands.add_parser("check-many", help="Check1..8 explicit scenario files in model-only scope with separate coverage and bounded total requested states")
+    batch.add_argument("scenarios", nargs="+")
+    batch.add_argument("--max-depth", type=int, default=8)
+    batch.add_argument("--max-states", type=int, default=25000, help="Per-scenario ceiling; selected count times ceiling must be<=200000")
+    batch.add_argument("--report", help="Atomically save full per-scenario model reports")
+    batch.add_argument("--force", action="store_true")
     suite = commands.add_parser("suite", help="Verify the eight complete bundled conflict/control cases in real handlers")
     suite.add_argument("--fixture", action="append", choices=sorted(EXPECTED_WITNESSES),
                        help="Check only this fixture (repeat to select several; default: all)")
@@ -355,6 +361,16 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(json.dumps(scenario, indent=2, sort_keys=True))
             return 0
+        if args.command == "check-many":
+            from .model_batch import check_many
+            for source in args.scenarios:
+                _validate_outputs(source, [args.report] if args.report else [], args.force)
+            scenarios = [read_json(path) for path in args.scenarios]
+            result = check_many(scenarios, max_depth=args.max_depth, max_states=args.max_states)
+            if args.report:
+                _write(args.report, result, args.force)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 3 if result["any_incomplete"] else int(result["any_failure"])
         if args.command == "suite":
             _validate_outputs(None, [args.report] if args.report else [], args.force)
             result = run_suite(args.fixture, max_depth=args.max_depth,
