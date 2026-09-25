@@ -1,5 +1,5 @@
 """Compare validated model replays of two schedules, without executing code."""
-from .engine import replay_witness
+from .engine import replay_witness, validate_witness
 from .scenario import fingerprint
 
 
@@ -51,3 +51,26 @@ def compare_witnesses(left, right, *, fixture=None, require_pin=False):
             "scope": ("Explicit trusted bundled handlers; observed outcomes and per-side source binding/model agreement reported. Imported paths are inert. "
                       if fixture is not None else "Both witnesses validated and replayed in the same declared model; no handler execution. ") +
                      "First unequal event (or end of one schedule), with each side after that event or at its retained terminal state, plus final outcomes. Ordinal comparison only, not causal alignment, shortest failure, full search or general branch safety."}
+
+
+def compare_witness_structure(left, right):
+    """Compare validated declarations and event positions without replay."""
+    validate_witness(left)
+    validate_witness(right)
+    if fingerprint(left["scenario"]) != fingerprint(right["scenario"]):
+        raise ValueError("witnesses must describe the same scenario")
+    shared = 0
+    for one, two in zip(left["events"], right["events"]):
+        if one != two:
+            break
+        shared += 1
+    identical = left["events"] == right["events"]
+    return {"format": "interlock-witness-structure-comparison-v1", "scenario_sha256": left["scenario_sha256"],
+            "left_sha256": fingerprint(left), "right_sha256": fingerprint(right),
+            "left_event_count": len(left["events"]), "right_event_count": len(right["events"]),
+            "identical_events": identical, "common_event_prefix_length": shared,
+            "first_event_difference": None if identical else {"event_number": shared+1,
+                "left_ended": shared == len(left["events"]), "right_ended": shared == len(right["events"])},
+            "source_binding_recorded": {"left": "fixture" in left, "right": "fixture" in right},
+            "execution_scope": "none", "source_verification": "not_checked", "event_legality": "not_checked",
+            "scope": "Validated envelopes, scenario identity and ordinal event-sequence differences only. No model transitions, handlers or installed source verification. Event names, scenario titles and imported paths omitted; counts/fingerprints may still be sensitive. Event equality does not establish legality, source identity, behavioral equivalence, causal alignment, outcomes or branch safety. Choose explicit replay for execution evidence."}

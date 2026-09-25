@@ -220,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     comparison.add_argument("--require-pin", action="store_true", help="Require both verified source bindings; requires --fixture")
     compare_mode = comparison.add_mutually_exclusive_group(required=True)
     compare_mode.add_argument("--model-only", action="store_true")
+    compare_mode.add_argument("--structure-only", action="store_true", help="Compare validated event positions without replay, event names or safety outcomes")
     compare_mode.add_argument("--fixture", choices=sorted(FIXTURES), help="Opt in to both schedules' trusted bundled handlers; imported code is never executed")
     minimize = commands.add_parser("minimize", help="Reduce an imported trace with explicit model-only or pinned bundled-handler scope")
     minimize.add_argument("witness")
@@ -261,8 +262,13 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(inspect_witness(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES)),indent=2,sort_keys=True))
             return 0
         if args.command == "compare-witnesses":
-            from .witness_comparison import compare_witnesses
-            result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES), fixture=args.fixture, require_pin=args.require_pin)
+            from .witness_comparison import compare_witnesses, compare_witness_structure
+            if args.structure_only and args.require_pin:
+                raise ValueError("source pin requirement needs a fixture replay")
+            left = read_json(args.left, max_bytes=MAX_WITNESS_BYTES)
+            right = read_json(args.right, max_bytes=MAX_WITNESS_BYTES)
+            result = (compare_witness_structure(left, right) if args.structure_only else
+                      compare_witnesses(left, right, fixture=args.fixture, require_pin=args.require_pin))
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0
         if args.command == "view-witness":
