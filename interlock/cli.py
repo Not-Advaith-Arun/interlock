@@ -200,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     reproduce.add_argument("witness")
     reproduce.add_argument("--json", action="store_true")
     reproduce.add_argument("--require-pin", action="store_true", help="Require verified source binding before trusted handler execution; requires --fixture")
+    reproduce.add_argument("--trace-limit", type=int, help="Return1..1000 trace frames as JSON after full requested replay; preserve final outcomes")
+    reproduce.add_argument("--from-step", type=int, default=0, help="Inclusive original trace-step cursor for --trace-limit;0 includes initial state")
     reproduce.add_argument("--summary", action="store_true", help="Emit compact JSON outcomes without detailed trace/state; perform the same full requested replay")
     replay_mode = reproduce.add_mutually_exclusive_group()
     replay_mode.add_argument("--fixture", choices=sorted(FIXTURES),
@@ -251,6 +253,12 @@ def main(argv: list[str] | None = None) -> int:
     view.add_argument("--force", action="store_true", help="Allow replacement of an existing HTML file")
     args = parser.parse_args(argv)
     try:
+        if args.command == "replay":
+            if args.trace_limit is not None:
+                if not args.json or args.summary or not 1 <= args.trace_limit <= 1000 or not 0 <= args.from_step <= 1001:
+                    raise ValueError("trace paging requires --json, no --summary, trace limit1..1000 and from step0..1001")
+            elif args.from_step:
+                raise ValueError("--from-step requires --trace-limit")
         if getattr(args, "require_pin", False) and not args.fixture:
             raise ValueError("--require-pin requires --fixture")
         if args.command == "sweep-depths":
@@ -445,6 +453,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.summary:
                 print(json.dumps(_replay_summary(witness, result, fixture=True), indent=2, sort_keys=True))
             elif args.json:
+                if args.trace_limit is not None:
+                    from .trace_page import trace_page
+                    result = trace_page(witness, result, start=args.from_step, limit=args.trace_limit)
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
                 print("Fixture source identity: " + provenance)
@@ -457,6 +468,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.summary:
             print(json.dumps(_replay_summary(witness, result), indent=2, sort_keys=True))
         elif args.json:
+            if args.trace_limit is not None:
+                from .trace_page import trace_page
+                result = trace_page(witness, result, start=args.from_step, limit=args.trace_limit)
             print(json.dumps(result, indent=2, sort_keys=True))
         else:
             if "fixture" in witness:
