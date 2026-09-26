@@ -208,6 +208,13 @@ def main(argv: list[str] | None = None) -> int:
                            help="Opt in to replaying this witness against trusted bundled handlers")
     replay_mode.add_argument("--model-only", action="store_true",
                              help="Replay only the embedded model, without checking pinned fixture sources")
+    prefix = commands.add_parser("replay-prefix", help="Execute only an explicit witness prefix; remaining event legality/outcomes are not checked")
+    prefix.add_argument("witness")
+    prefix.add_argument("--through-step", type=int, required=True, help="Inclusive event count;0 executes initial state only")
+    prefix.add_argument("--require-pin", action="store_true")
+    prefix_mode = prefix.add_mutually_exclusive_group(required=True)
+    prefix_mode.add_argument("--model-only", action="store_true")
+    prefix_mode.add_argument("--fixture", choices=sorted(FIXTURES))
     sweep = commands.add_parser("sweep-depths", help="Compare bounded model/optional bundled-handler checks at selected depths")
     sweep.add_argument("scenario")
     sweep.add_argument("--depth", type=int, action="append", required=True)
@@ -261,6 +268,16 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("--from-step requires --trace-limit")
         if getattr(args, "require_pin", False) and not args.fixture:
             raise ValueError("--require-pin requires --fixture")
+        if args.command == "replay-prefix":
+            from .prefix_replay import replay_prefix
+            result = replay_prefix(read_json(args.witness, max_bytes=MAX_WITNESS_BYTES), args.through_step,
+                                   fixture=args.fixture, require_pin=args.require_pin)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            replayed = result["result"]
+            if args.fixture and not replayed["agreement"]:
+                return 4
+            outcomes = replayed["observed_outcomes"] if args.fixture else replayed["outcomes"]
+            return int(any(not row["passed"] for row in outcomes.values()))
         if args.command == "sweep-depths":
             from .depth_sweep import sweep_depths
             result = sweep_depths(read_json(args.scenario), args.depth, args.max_states, profile=args.profile,
