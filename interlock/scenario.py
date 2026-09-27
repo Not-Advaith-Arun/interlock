@@ -64,6 +64,10 @@ def read_json(path: str | Path, *, max_bytes: int = MAX_INPUT_BYTES) -> Any:
         if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
             raise ValueError("scenario and witness inputs must be regular files")
         raw = stream.read(max_bytes + 1)
+    return decode_json_input(raw,max_bytes=max_bytes)
+
+
+def decode_json_input(raw, *, max_bytes=MAX_INPUT_BYTES):
     if len(raw) > max_bytes:
         raise ValueError(f"input exceeds {max_bytes / 1_000_000:g} MB limit")
     def reject_constant(value: str) -> None:

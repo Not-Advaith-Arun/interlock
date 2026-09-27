@@ -183,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     case_compare.add_argument("before")
     case_compare.add_argument("after")
     cases = commands.add_parser("check-cases", help="Run a caller-authored bounded model regression manifest with expected classifications")
-    cases.add_argument("manifest")
+    cases.add_argument("manifest",help="Local manifest file or - for bounded JSON stdin")
     cases.add_argument("--case", action="append", help="Run only these existing case IDs; full manifest still validates")
     cases.add_argument("--max-depth", type=int, default=8)
     cases.add_argument("--max-states", type=int, default=25000)
@@ -403,8 +403,13 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "check-cases":
             from .model_cases import check_cases, cases_summary
-            _validate_outputs(args.manifest, [args.report] if args.report else [], args.force)
-            result = check_cases(read_json(args.manifest), max_depth=args.max_depth, max_states=args.max_states, selected_ids=args.case)
+            _validate_outputs(None if args.manifest == "-" else args.manifest, [args.report] if args.report else [], args.force)
+            if args.manifest == "-":
+                from .scenario import decode_json_input, MAX_INPUT_BYTES
+                manifest = decode_json_input(sys.stdin.buffer.read(MAX_INPUT_BYTES+1))
+            else:
+                manifest = read_json(args.manifest)
+            result = check_cases(manifest, max_depth=args.max_depth, max_states=args.max_states, selected_ids=args.case)
             if args.report:
                 _write(args.report, result, args.force)
             print(json.dumps(cases_summary(result) if args.summary else result, indent=2, sort_keys=True))
