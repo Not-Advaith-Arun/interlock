@@ -241,6 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     scenarios = commands.add_parser("compare-scenarios", help="Compare declared configuration changes without executing or assessing safety")
     scenarios.add_argument("left")
     scenarios.add_argument("right")
+    scenarios.add_argument("--html", action="store_true", help="Captured declared differences only; no search or execution")
     inspection = commands.add_parser("inspect-witness", help="Inspect witness structure/counts/fingerprints without replay or source verification")
     inspection.add_argument("witness")
     inspection.add_argument("--html", action="store_true", help="Offline structural intake only; no replay or source verification")
@@ -305,7 +306,12 @@ def main(argv: list[str] | None = None) -> int:
             return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
         if args.command == "compare-scenarios":
             from .scenario_comparison import compare_scenarios
-            print(json.dumps(compare_scenarios(read_json(args.left), read_json(args.right)), indent=2, sort_keys=True))
+            result = compare_scenarios(read_json(args.left), read_json(args.right))
+            if args.html:
+                from .scenario_view import render_scenarios
+                print(render_scenarios(result))
+            else:
+                print(json.dumps(result, indent=2, sort_keys=True))
             return 0
         if args.command == "inspect-witness":
             from .witness_inspection import inspect_witness
