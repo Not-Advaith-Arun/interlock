@@ -243,9 +243,11 @@ def main(argv: list[str] | None = None) -> int:
     scenarios.add_argument("right")
     inspection = commands.add_parser("inspect-witness", help="Inspect witness structure/counts/fingerprints without replay or source verification")
     inspection.add_argument("witness")
+    inspection.add_argument("--html", action="store_true", help="Offline structural intake only; no replay or source verification")
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated schedules with explicit model or trusted bundled-handler scope")
     comparison.add_argument("left")
     comparison.add_argument("right")
+    comparison.add_argument("--html", action="store_true", help="Requires --structure-only; no model or handler execution")
     comparison.add_argument("--require-pin", action="store_true", help="Require both verified source bindings; requires --fixture")
     compare_mode = comparison.add_mutually_exclusive_group(required=True)
     compare_mode.add_argument("--model-only", action="store_true")
@@ -307,9 +309,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "inspect-witness":
             from .witness_inspection import inspect_witness
-            print(json.dumps(inspect_witness(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES)),indent=2,sort_keys=True))
+            result = inspect_witness(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES))
+            if args.html:
+                from .preflight_view import render_preflight
+                print(render_preflight(result))
+            else:
+                print(json.dumps(result,indent=2,sort_keys=True))
             return 0
         if args.command == "compare-witnesses":
+            if args.html and not args.structure_only:
+                raise ValueError("HTML preflight requires --structure-only; use explicit JSON replay for execution")
             from .witness_comparison import compare_witnesses, compare_witness_structure
             if args.structure_only and args.require_pin:
                 raise ValueError("source pin requirement needs a fixture replay")
@@ -317,7 +326,11 @@ def main(argv: list[str] | None = None) -> int:
             right = read_json(args.right, max_bytes=MAX_WITNESS_BYTES)
             result = (compare_witness_structure(left, right) if args.structure_only else
                       compare_witnesses(left, right, fixture=args.fixture, require_pin=args.require_pin))
-            print(json.dumps(result, indent=2, sort_keys=True))
+            if args.html:
+                from .preflight_view import render_preflight
+                print(render_preflight(result))
+            else:
+                print(json.dumps(result, indent=2, sort_keys=True))
             return 0
         if args.command == "view-witness":
             from .witness_view import render_witness
