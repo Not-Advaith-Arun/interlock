@@ -18,3 +18,31 @@ document.getElementById('download-view').addEventListener('click',()=>{
   output.body.append(main);
   const blob=new Blob(['<!doctype html>'+output.documentElement.outerHTML],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='captured-visible-rows.html';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
+
+// Presentation ordering only: native evidence and explicit saved search/group views stay unchanged.
+(()=>{
+  const section=document.querySelector('section[aria-label="Report results"]');
+  const original=[...rows],positions=new Map(original.map((row,index)=>[row,index]));
+  const panel=document.createElement('details');panel.className='saved-review-views';
+  const summary=document.createElement('summary');summary.textContent='Order captured cards';
+  const controls=document.createElement('div');controls.className='review-view-controls';
+  const label=document.createElement('label'),choice=document.createElement('select');
+  choice.setAttribute('aria-label','Order report cards by');label.append(document.createTextNode('Order report cards by'),choice);
+  const initial=document.createElement('option');initial.value='';initial.textContent='Captured order';choice.append(initial);
+  for(const [index,term] of [...(original[0]?.querySelectorAll('dt')||[])].entries()){
+    const option=document.createElement('option');option.value=String(index);option.textContent=term.textContent;choice.append(option);
+  }
+  const reverse=document.createElement('button');reverse.type='button';reverse.textContent='Reverse card order';reverse.disabled=true;reverse.setAttribute('aria-pressed','false');
+  const note=document.createElement('p');note.textContent='Natural text order of displayed values only, not numeric analysis, evidence priority or fresh verification. Equal values retain captured order. Search/group presets do not capture card order; native JSON keeps original order.';
+  let descending=false;const collator=new Intl.Collator('en',{numeric:true,sensitivity:'variant'});
+  function order(){
+    reverse.disabled=choice.value==='';reverse.setAttribute('aria-pressed',String(descending));
+    const index=Number(choice.value);
+    rows.sort((one,two)=>{if(choice.value==='')return positions.get(one)-positions.get(two);
+      const values=[one,two].map(row=>row.querySelectorAll('dd')[index]?.textContent||'');
+      return collator.compare(values[0],values[1])*(descending?-1:1)||positions.get(one)-positions.get(two);});
+    for(const row of rows)section.append(row);filter();
+  }
+  choice.addEventListener('change',()=>{descending=false;order();});reverse.addEventListener('click',()=>{descending=!descending;order();});
+  window.addEventListener('pageshow',order);controls.append(label,reverse);panel.append(summary,controls,note);section.before(panel);
+})();
