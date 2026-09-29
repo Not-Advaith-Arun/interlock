@@ -5,7 +5,7 @@ from interlock.report_cards import render_report
 class ReportEmbedding(unittest.TestCase):
     def test_untrusted_metadata_stays_literal_in_text_attributes_and_json(self):
         hostile='</script><img src=x onerror="window.injected=true"> & __SCRIPT__'
-        document=render_report(hostile,hostile,['Value'],[{'group':hostile,'cells':[hostile]}],payload={'value':hostile})
+        document=render_report(hostile,hostile,['Value'],[{'group':hostile,'cells':[hostile]}],payload={'value':hostile},summary=hostile)
         self.assertNotIn('<img src=x',document)
         self.assertIn('&lt;/script&gt;',document)
         raw=re.search(r'<script id="report-data" type="application/json">(.*?)</script>',document,re.S).group(1)
