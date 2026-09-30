@@ -210,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     suite.add_argument("--max-states", type=int, default=50_000)
     suite.add_argument("--max-schedules", type=int, default=MAX_FIXTURE_SCHEDULES)
     suite.add_argument("--json", action="store_true")
+    suite.add_argument("--html",action="store_true",help="Captured bundled-handler suite verdict/coverage cards; executes the requested suite")
     suite.add_argument("--summary", action="store_true", help="Emit compact JSON verdicts/coverage after full execution; --report still saves complete diagnostics")
     suite.add_argument("--report", help="Also write the full suite report to this file")
     suite.add_argument("--force", action="store_true", help="Allow replacement of an existing report")
@@ -480,12 +481,17 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(result, indent=2, sort_keys=True))
             return 3 if result["any_incomplete"] else int(result["any_failure"])
         if args.command == "suite":
+            if args.html and (args.summary or args.json):
+                raise ValueError("choose HTML or native JSON/summary suite output")
             _validate_outputs(None, [args.report] if args.report else [], args.force)
             result = run_suite(args.fixture, max_depth=args.max_depth,
                                max_states=args.max_states, max_schedules=args.max_schedules)
             if args.report:
                 _write(args.report, result, args.force)
-            if args.summary:
+            if args.html:
+                from .suite_view import render_suite
+                print(render_suite(result))
+            elif args.summary:
                 from .suite import suite_summary
                 print(json.dumps(suite_summary(result), indent=2, sort_keys=True))
             elif args.json:
