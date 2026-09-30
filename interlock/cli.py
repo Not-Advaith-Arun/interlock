@@ -268,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
                           help="Acknowledge that pinned sources and actual handlers will not be checked")
     minimize.add_argument("--max-attempts", type=int, default=500)
     minimize.add_argument("--max-diagnostics", type=int, default=0, help="Retain the first 0..1000 removal decisions without changing reduction")
+    minimize.add_argument("--html", action="store_true", help="Read-only model reduction metadata; no witness or diagnostic export")
     minimize.add_argument("--json", action="store_true")
     minimize.add_argument("--report", help="Write a diagnostic report, not a publishable witness")
     minimize.add_argument("--model-witness", help="Export a replayable v1 witness only after complete reduction; requires --model-only and makes no source verification claim")
@@ -380,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
             return 4 if result.get("agreement") is False else 0
         if args.command == "minimize":
             from .reduction import reduce_witness
+            if args.html and (not args.model_only or args.json or args.report or args.model_witness):
+                raise ValueError("reduction HTML requires --model-only and no JSON/report/witness export")
             if args.model_witness and not args.model_only:
                 raise ValueError("model witness export requires explicit --model-only")
             _validate_outputs(args.witness, [p for p in (args.report, args.model_witness) if p], args.force)
@@ -397,7 +400,10 @@ def main(argv: list[str] | None = None) -> int:
                 _write(args.report, result, args.force)
             if exported is not None:
                 _write(args.model_witness, exported, args.force, compact=True, max_bytes=MAX_WITNESS_BYTES)
-            if args.json:
+            if args.html:
+                from .reduction_view import render_reduction
+                print(render_reduction(result))
+            elif args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
                 print(f"Trace reduction: {result['status']}; removed {result['removed_events']} events "
