@@ -76,3 +76,22 @@ def render_case_inspection(report):
     from .report_cards import render_report
     rows=[{'group':c['expected_status'],'cells':[c['id'],c['model'],c['expected_status'],c['scenario_sha256']]}for c in report['cases']]
     return render_report('Interlock regression manifest inspection',report['scope'],['Case ID','Model','Declared expectation','Scenario identity'],rows,payload=report,summary=f"Inspected {len(rows)} of {report['manifest_cases']} declarations; {report['omitted_cases']} omitted from display. All declarations validated; no search or handler execution, no passing-run evidence.")
+
+
+def compare_case_manifests(left,right):
+    from .scenario import fingerprint
+    a=validated_cases(left);b=validated_cases(right);first={row['id']:(i,row)for i,row in enumerate(a,1)};second={row['id']:(i,row)for i,row in enumerate(b,1)}
+    rows=[]
+    for key in sorted(first.keys()|second.keys()):
+        one=first.get(key);two=second.get(key)
+        old={'ordinal':one[0],'expected_status':one[1]['expected_status'],'scenario_sha256':fingerprint(one[1]['scenario'])}if one else None
+        new={'ordinal':two[0],'expected_status':two[1]['expected_status'],'scenario_sha256':fingerprint(two[1]['scenario'])}if two else None
+        rows.append({'id':key,'presence':'both'if one and two else'left_only'if one else'right_only','left':old,'right':new,'expectation_changed':bool(old and new and old['expected_status']!=new['expected_status']),'scenario_changed':bool(old and new and old['scenario_sha256']!=new['scenario_sha256'])})
+    return {'format':'interlock-case-manifest-comparison-v1','left_cases':len(a),'right_cases':len(b),'cases':rows,
+            'scope':'Complete structural validation of both manifests only. Declared expectation changes are separate from scenario-identity and order changes; no expected/observed result, search, source-pin check or handler execution. Private scenario names/configuration omitted. Neither label changes nor identical definitions establish passing behavior, safety, authenticity or an approved test update.'}
+
+
+def render_manifest_comparison(report):
+    from .report_cards import render_report
+    rows=[{'group':row['presence'],'cells':[row['id'],row['left']['expected_status']if row['left']else'Absent',row['right']['expected_status']if row['right']else'Absent',row['expectation_changed'],row['scenario_changed']]}for row in report['cases']]
+    return render_report('Interlock regression declaration comparison',report['scope'],['Case ID','Left expectation','Right expectation','Expectation differs','Scenario identity differs'],rows,payload=report,summary='Declared expectations, scenario identities and case presence compared without execution. Changing an expected classification is not evidence of a passing or safer implementation.')

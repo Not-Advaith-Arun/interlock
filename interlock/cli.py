@@ -187,6 +187,10 @@ def main(argv: list[str] | None = None) -> int:
     case_compare.add_argument("after")
     case_compare.add_argument("--html", action="store_true", help="Offline recorded metadata comparison; no replay or safety claim")
     from .case_template import REFERENCE_EXPECTATIONS
+    manifest_comparison=commands.add_parser("compare-case-manifests",help="Compare declared expectations/scenario identities without search or handler execution")
+    manifest_comparison.add_argument("left",type=Path)
+    manifest_comparison.add_argument("right",type=Path)
+    manifest_comparison.add_argument("--html",action="store_true")
     case_inspection=commands.add_parser("inspect-cases",help="Validate a complete case manifest without running search or handlers")
     case_inspection.add_argument("input",type=Path)
     case_inspection.add_argument("--case",action="append")
@@ -468,6 +472,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(render_case_comparison(result))
             else:
                 print(json.dumps(result,indent=2,sort_keys=True))
+            return 0
+        if args.command == "compare-case-manifests":
+            from .model_cases import compare_case_manifests,render_manifest_comparison
+            report=compare_case_manifests(read_json(args.left),read_json(args.right))
+            print(render_manifest_comparison(report)if args.html else json.dumps(report,indent=2))
             return 0
         if args.command == "inspect-cases":
             from .model_cases import inspect_cases, render_case_inspection
