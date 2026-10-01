@@ -159,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     showcase_arguments(commands.add_parser("showcase", help="generate an interactive offline product sample"))
     historical = commands.add_parser("historical-waitfor", help="Calibrate a pinned CPython before/fix pair separately from merge checking")
     historical.add_argument("--model-only", action="store_true", help="Run only the finite decision model; do not execute selected historical functions")
+    historical.add_argument("--html",action="store_true",help="Captured metadata cards; cannot combine with JSON or report export")
     historical.add_argument("--json", action="store_true")
     historical.add_argument("--report", help="Write the versioned local calibration report")
     historical.add_argument("--force", action="store_true", help="Allow replacement of an existing report")
@@ -413,11 +414,16 @@ def main(argv: list[str] | None = None) -> int:
             return 4 if result["status"] == "fixture_mismatch" else 0 if result["one_event_deletion_minimal"] else 3
         if args.command == "historical-waitfor":
             from .historical_waitfor import EXIT_CODES, run_calibration
+            if args.html and (args.json or args.report):
+                raise ValueError("calibration HTML cannot combine with JSON or report export")
             _validate_outputs(None, [args.report] if args.report else [], args.force)
             result = run_calibration(model_only=args.model_only)
             if args.report:
                 _write(args.report, result, args.force)
-            if args.json:
+            if args.html:
+                from .calibration_view import render_calibration
+                print(render_calibration(result))
+            elif args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
                 print(f"Historical before/fix calibration: {result['status']}")
