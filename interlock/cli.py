@@ -214,6 +214,12 @@ def main(argv: list[str] | None = None) -> int:
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
+    case_depths=commands.add_parser("check-case-depths",help="Run explicit model case regressions independently at several bounded depths; preserve per-depth coverage/expectations")
+    case_depths.add_argument("manifest",type=Path)
+    case_depths.add_argument("--depth",type=int,action="append",required=True)
+    case_depths.add_argument("--case",action="append")
+    case_depths.add_argument("--max-states",type=int,default=5000)
+    case_depths.add_argument("--html",action="store_true")
     cases = commands.add_parser("check-cases", help="Run a caller-authored bounded model regression manifest with expected classifications")
     cases.add_argument("manifest",help="Local manifest file or - for bounded JSON stdin")
     cases.add_argument("--case", action="append", help="Run only these existing case IDs; full manifest still validates")
@@ -480,6 +486,11 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(json.dumps(scenario, indent=2, sort_keys=True))
             return 0
+        if args.command == "check-case-depths":
+            from .case_depths import check_case_depths,render_case_depths
+            result=check_case_depths(read_json(args.manifest),args.depth,max_states=args.max_states,selected_ids=args.case)
+            print(render_case_depths(result)if args.html else json.dumps(result,indent=2))
+            return 2 if result['any_incomplete']else 1 if result['any_unexpected']else 0
         if args.command == "inspect-case-binding":
             from .case_binding import inspect_case_binding,render_case_binding
             result=inspect_case_binding(read_json(args.manifest),read_json(args.report),args.case)
