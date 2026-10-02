@@ -182,6 +182,10 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--force", action="store_true", help="Allow replacement of existing output files")
     check.add_argument("--fixture", choices=sorted(FIXTURES),
                        help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
+    witness_cases=commands.add_parser("match-witness-cases",help="Match witness canonical scenario identity to complete explicit case declarations without replay, outcomes or source verification")
+    witness_cases.add_argument("witness",type=Path)
+    witness_cases.add_argument("manifest",type=Path)
+    witness_cases.add_argument("--html",action="store_true")
     binding=commands.add_parser("inspect-case-binding",help="Compare retained recorded case identities/expectations against explicit declarations; no execution or authentication")
     binding.add_argument("manifest",type=Path)
     binding.add_argument("report",type=Path)
@@ -486,6 +490,11 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(json.dumps(scenario, indent=2, sort_keys=True))
             return 0
+        if args.command == "match-witness-cases":
+            from .witness_case_match import match_witness_cases,render_witness_case_match
+            result=match_witness_cases(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES),read_json(args.manifest))
+            print(render_witness_case_match(result)if args.html else json.dumps(result,indent=2))
+            return 0 if result['matched']else 1
         if args.command == "check-case-depths":
             from .case_depths import check_case_depths,render_case_depths
             result=check_case_depths(read_json(args.manifest),args.depth,max_states=args.max_states,selected_ids=args.case)
