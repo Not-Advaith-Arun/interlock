@@ -3,12 +3,16 @@ from .model_cases import validated_cases,check_cases
 from .report_cards import render_report
 
 
-def check_case_depths(manifest,depths,*,max_states=5000,selected_ids=None):
-    cases=validated_cases(manifest,selected_ids)
+def validate_depth_budget(depths,max_states,case_count):
     if(not isinstance(depths,list)or not 1<=len(depths)<=8 or any(type(d)is not int or not 0<=d<=64 for d in depths)or len(set(depths))!=len(depths)):
         raise ValueError('select1..8 distinct depths0..64')
-    if type(max_states)is not int or max_states<1 or max_states*len(depths)*len(cases)>200000:
+    if type(max_states)is not int or max_states<1 or max_states*len(depths)*case_count>200000:
         raise ValueError('total requested cases times depths times state budget must be1..200000')
+
+
+def check_case_depths(manifest,depths,*,max_states=5000,selected_ids=None):
+    cases=validated_cases(manifest,selected_ids)
+    validate_depth_budget(depths,max_states,len(cases))
     rows=[]
     for depth in sorted(depths):
         checked=check_cases(manifest,max_depth=depth,max_states=max_states,selected_ids=selected_ids)

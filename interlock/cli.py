@@ -222,11 +222,16 @@ def main(argv: list[str] | None = None) -> int:
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
+    depth_template_parser=commands.add_parser("case-depth-template",help="Choose bounded case/depth settings under a complete declaration guard without executing models")
+    depth_template_parser.add_argument("manifest",type=Path)
+    depth_template_parser.add_argument("--json",action="store_true")
     case_depths=commands.add_parser("check-case-depths",help="Run explicit model case regressions independently at several bounded depths; preserve per-depth coverage/expectations")
     case_depths.add_argument("manifest",type=Path)
-    case_depths.add_argument("--depth",type=int,action="append",required=True)
+    depth_input=case_depths.add_mutually_exclusive_group(required=True)
+    depth_input.add_argument("--depth",type=int,action="append")
+    depth_input.add_argument("--plan",type=Path)
     case_depths.add_argument("--case",action="append")
-    case_depths.add_argument("--max-states",type=int,default=5000)
+    case_depths.add_argument("--max-states",type=int,help="Manual per-cell budget; default5000, incompatible with captured --plan")
     case_depths.add_argument("--html",action="store_true")
     cases = commands.add_parser("check-cases", help="Run a caller-authored bounded model regression manifest with expected classifications")
     cases.add_argument("manifest",help="Local manifest file or - for bounded JSON stdin")
@@ -499,9 +504,19 @@ def main(argv: list[str] | None = None) -> int:
             result=match_witness_cases(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES),read_json(args.manifest))
             print(render_witness_case_match(result)if args.html else json.dumps(result,indent=2))
             return 0 if result['matched']else 1
+        if args.command == "case-depth-template":
+            from .depth_template import depth_template,render_depth_template
+            result=depth_template(read_json(args.manifest))
+            print(json.dumps(result,indent=2)if args.json else render_depth_template(result))
+            return 0
         if args.command == "check-case-depths":
             from .case_depths import check_case_depths,render_case_depths
-            result=check_case_depths(read_json(args.manifest),args.depth,max_states=args.max_states,selected_ids=args.case)
+            manifest=read_json(args.manifest)
+            if args.plan:
+                if args.case is not None or args.max_states is not None:raise ValueError('choose captured plan or manual cases/state budget, not both')
+                from .depth_template import consume_depth_plan
+                args.case,args.depth,args.max_states=consume_depth_plan(manifest,read_json(args.plan))
+            result=check_case_depths(manifest,args.depth,max_states=args.max_states if args.max_states is not None else 5000,selected_ids=args.case)
             print(render_case_depths(result)if args.html else json.dumps(result,indent=2))
             return 2 if result['any_incomplete']else 1 if result['any_unexpected']else 0
         if args.command == "inspect-case-binding":
