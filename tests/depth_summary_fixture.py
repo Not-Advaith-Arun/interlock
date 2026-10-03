@@ -1,0 +1,10 @@
+from pathlib import Path
+import json,sys,subprocess,copy
+from interlock.case_template import case_template
+root=Path(sys.argv[1]);manifest=root/'cases.json';manifest.write_text(json.dumps(case_template(['retry-fixed'])));report=root/'grid.json'
+def cli(*args):return subprocess.run([sys.executable,'-m','interlock',*map(str,args)],capture_output=True,text=True)
+r=cli('check-case-depths',manifest,'--depth','1','--depth','2','--depth','4','--depth','8','--max-states','2');assert r.returncode==2;report.write_text(r.stdout);original=report.read_bytes();r=cli('case-depth-summary',report);assert r.returncode==0,r.stderr;data=json.loads(r.stdout);case=data['cases'][0];assert case['highest_recorded_complete_depth']==1 and case['recorded_complete_depths']==[1]and case['incomplete_depths']==case['deeper_incomplete_depths']==[2,4,8]and data['recorded_grid_status']=='incomplete';h=cli('case-depth-summary',report,'--html');assert h.returncode==0;(root/'summary.html').write_text(h.stdout);(root/'expected.json').write_text(json.dumps(data));assert report.read_bytes()==original
+code="from unittest.mock import patch;from interlock.cli import main\nwith patch('interlock.engine._initial',side_effect=RuntimeError('search forbidden')),patch('interlock.fixture.check_fixture',side_effect=RuntimeError('handler forbidden')):raise SystemExit(main("+repr(['case-depth-summary',str(report)])+"))";assert subprocess.run([sys.executable,'-c',code],capture_output=True).returncode==0
+bad=json.loads(original);bad['results'].pop();report.write_text(json.dumps(bad));r=cli('case-depth-summary',report);assert r.returncode==2 and not r.stdout;report.write_bytes(original)
+# All incomplete must keep the highest recorded complete bound unavailable.
+r=cli('check-case-depths',manifest,'--depth','1','--depth','2','--max-states','1');assert r.returncode==2;report.write_text(r.stdout);r=cli('case-depth-summary',report);assert r.returncode==0;assert json.loads(r.stdout)['cases'][0]['highest_recorded_complete_depth']is None;report.write_bytes(original)

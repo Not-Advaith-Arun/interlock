@@ -222,6 +222,9 @@ def main(argv: list[str] | None = None) -> int:
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
+    depth_summary=commands.add_parser("case-depth-summary",help="Summarize retained complete/incomplete bounds separately without search, interpolation or safety claims")
+    depth_summary.add_argument("report",type=Path)
+    depth_summary.add_argument("--html",action="store_true")
     depth_template_parser=commands.add_parser("case-depth-template",help="Choose bounded case/depth settings under a complete declaration guard without executing models")
     depth_template_parser.add_argument("manifest",type=Path)
     depth_template_parser.add_argument("--json",action="store_true")
@@ -504,6 +507,11 @@ def main(argv: list[str] | None = None) -> int:
             result=match_witness_cases(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES),read_json(args.manifest))
             print(render_witness_case_match(result)if args.html else json.dumps(result,indent=2))
             return 0 if result['matched']else 1
+        if args.command == "case-depth-summary":
+            from .depth_summary import summarize_depths,render_depth_summary
+            result=summarize_depths(read_json(args.report))
+            print(render_depth_summary(result)if args.html else json.dumps(result,indent=2))
+            return 0
         if args.command == "case-depth-template":
             from .depth_template import depth_template,render_depth_template
             result=depth_template(read_json(args.manifest))
