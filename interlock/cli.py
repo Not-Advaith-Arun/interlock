@@ -191,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     binding.add_argument("report",type=Path)
     binding.add_argument("--case",action="append")
     binding.add_argument("--html",action="store_true")
+    depth_compare=commands.add_parser("compare-case-depths",help="Compare complete recorded case/depth matrices and coverage without executing models")
+    depth_compare.add_argument("before",type=Path)
+    depth_compare.add_argument("after",type=Path)
+    depth_compare.add_argument("--html",action="store_true")
     case_compare = commands.add_parser("compare-case-results", help="Compare recorded model case classifications without replay, execution or safety judgment")
     case_compare.add_argument("before")
     case_compare.add_argument("after")
@@ -505,6 +509,11 @@ def main(argv: list[str] | None = None) -> int:
             result=inspect_case_binding(read_json(args.manifest),read_json(args.report),args.case)
             print(render_case_binding(result)if args.html else json.dumps(result,indent=2))
             return 0 if result['matches_declarations']else 1
+        if args.command == "compare-case-depths":
+            from .depth_comparison import compare_depth_results,render_depth_comparison
+            result=compare_depth_results(read_json(args.before),read_json(args.after))
+            print(render_depth_comparison(result)if args.html else json.dumps(result,indent=2))
+            return 0
         if args.command == "compare-case-results":
             from .case_comparison import compare_case_results
             result = compare_case_results(read_json(args.before),read_json(args.after),include_coverage=args.include_coverage)
