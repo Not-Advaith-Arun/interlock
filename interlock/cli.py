@@ -228,6 +228,9 @@ def main(argv: list[str] | None = None) -> int:
     expectations = commands.add_parser("revise-case-expectations", help="Export a new private full-scenario manifest from explicit guarded declaration edits; never execute or overwrite input")
     expectations.add_argument("manifest")
     expectations.add_argument("draft")
+    depth_picker = commands.add_parser("case-depth-picker", help="Choose complete per-case retained depth slices offline without search or source verification")
+    depth_picker.add_argument("report")
+    depth_picker.add_argument("--json", action="store_true")
     depth_combine = commands.add_parser("combine-case-depths", help="Combine compatible complete retained depth slices without dropping conflicting claims or executing models")
     depth_combine.add_argument("left")
     depth_combine.add_argument("right")
@@ -529,6 +532,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "revise-case-expectations":
             from .expectation_workspace import revise_expectations
             print(json.dumps(revise_expectations(read_json(args.manifest), read_json(args.draft)), indent=2))
+            return 0
+        if args.command == "case-depth-picker":
+            from .depth_picker import depth_choices, render_depth_choices
+            result = depth_choices(read_json(args.report))
+            print(json.dumps(result, indent=2) if args.json else render_depth_choices(result))
             return 0
         if args.command == "combine-case-depths":
             from .depth_selection import combine_depth_cases
