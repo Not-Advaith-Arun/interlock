@@ -239,6 +239,11 @@ def main(argv: list[str] | None = None) -> int:
     depth_select.add_argument("report")
     depth_select.add_argument("--case", action="append", required=True)
     depth_select.add_argument("--html", action="store_true")
+    plan_binding=commands.add_parser("inspect-plan-binding",help="Match retained grid declarations/depths/state cap to original guarded bounded plan; no execution or safety approval")
+    plan_binding.add_argument("manifest",type=Path)
+    plan_binding.add_argument("plan",type=Path)
+    plan_binding.add_argument("report",type=Path)
+    plan_binding.add_argument("--html",action="store_true")
     depth_binding = commands.add_parser("inspect-depth-binding", help="Match every retained case/depth identity and expectation to complete supplied declarations without execution")
     depth_binding.add_argument("manifest", type=Path)
     depth_binding.add_argument("report", type=Path)
@@ -559,6 +564,11 @@ def main(argv: list[str] | None = None) -> int:
             result = select_depth_cases(read_json(args.report), args.case)
             print(render_case_depths(result) if args.html else json.dumps(result, indent=2))
             return 0
+        if args.command == "inspect-plan-binding":
+            from .plan_binding import inspect_plan_binding,render_plan_binding
+            result=inspect_plan_binding(read_json(args.manifest),read_json(args.plan),read_json(args.report))
+            print(render_plan_binding(result)if args.html else json.dumps(result,indent=2))
+            return 0 if result['matches_plan']else 1
         if args.command == "inspect-depth-binding":
             from .depth_binding import inspect_depth_binding, render_depth_binding
             result = inspect_depth_binding(read_json(args.manifest), read_json(args.report), args.case)
