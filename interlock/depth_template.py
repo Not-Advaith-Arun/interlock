@@ -31,6 +31,19 @@ def resume_depth_plan(manifest,plan):
     return result
 
 
+def combine_depth_plans(manifest,left,right):
+    a,ad,cap=consume_depth_plan(manifest,left);b,bd,other=consume_depth_plan(manifest,right)
+    if cap!=other:raise ValueError('combine only plans with the same explicit per-cell state cap')
+    cells={(key,depth)for keys,depths in [(a,ad),(b,bd)]for key in keys for depth in depths}
+    cases=sorted(set(a)|set(b));depths=sorted(set(ad)|set(bd))
+    if {(key,depth)for key in cases for depth in depths}!=cells:raise ValueError('union would introduce unrequested case/depth pairs; inspect an explicit new plan instead')
+    validate_depth_budget(depths,cap,len(cases))
+    result=resume_depth_plan(manifest,{**left,'case_ids':cases,'depths':depths})
+    result['combined_input_cells']=[len(a)*len(ad),len(b)*len(bd)];result['combined_cells']=len(cells)
+    result['scope']='Two complete original-guard plans validated against the same complete declarations. Same per-cell budget required; combine only if the resulting rectangle contains exactly the union of originally requested case/depth pairs, never hidden cross-product expansion. Duplicate pairs coalesce and the entire combined budget revalidates before output. Canonical union order is not execution evidence. No search, handlers, witness, source pin, input overwrite or guard refresh. '+result['scope']
+    return result
+
+
 def render_depth_template(report):
     rows=[{'group':'Available declaration','cells':[r['id'],r['expected_status'],r['scenario_sha256']]}for r in report['cases']]
     return render_report('Interlock bounded run planner',report['scope'],['Case ID','Declared expected classification','Canonical scenario identity'],rows,payload=report,summary=('Original explicit run choices restored; no search or guard refresh performed.'if report.get('resumed')else'Choose explicit declarations, depths and state budgets. No cases run and no result or safety verdict produced.'),extra_script=Path(__file__).with_name('ui').joinpath('depth_planner.js').read_text())
