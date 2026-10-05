@@ -247,6 +247,10 @@ def main(argv: list[str] | None = None) -> int:
     depth_summary=commands.add_parser("case-depth-summary",help="Summarize retained complete/incomplete bounds separately without search, interpolation or safety claims")
     depth_summary.add_argument("report",type=Path)
     depth_summary.add_argument("--html",action="store_true")
+    resume_plan = commands.add_parser("resume-depth-plan",help="Reopen explicit saved case/depth intent only on its unchanged complete declarations; no execution or guard refresh")
+    resume_plan.add_argument("manifest",type=Path)
+    resume_plan.add_argument("plan",type=Path)
+    resume_plan.add_argument("--json",action="store_true")
     depth_template_parser=commands.add_parser("case-depth-template",help="Choose bounded case/depth settings under a complete declaration guard without executing models")
     depth_template_parser.add_argument("manifest",type=Path)
     depth_template_parser.add_argument("--json",action="store_true")
@@ -564,6 +568,11 @@ def main(argv: list[str] | None = None) -> int:
             from .depth_summary import summarize_depths,render_depth_summary
             result=summarize_depths(read_json(args.report))
             print(render_depth_summary(result)if args.html else json.dumps(result,indent=2))
+            return 0
+        if args.command == "resume-depth-plan":
+            from .depth_template import resume_depth_plan,render_depth_template
+            result=resume_depth_plan(read_json(args.manifest),read_json(args.plan))
+            print(json.dumps(result,indent=2)if args.json else render_depth_template(result))
             return 0
         if args.command == "case-depth-template":
             from .depth_template import depth_template,render_depth_template
