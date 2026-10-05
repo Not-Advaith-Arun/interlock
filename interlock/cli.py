@@ -239,6 +239,11 @@ def main(argv: list[str] | None = None) -> int:
     depth_select.add_argument("report")
     depth_select.add_argument("--case", action="append", required=True)
     depth_select.add_argument("--html", action="store_true")
+    depth_binding = commands.add_parser("inspect-depth-binding", help="Match every retained case/depth identity and expectation to complete supplied declarations without execution")
+    depth_binding.add_argument("manifest", type=Path)
+    depth_binding.add_argument("report", type=Path)
+    depth_binding.add_argument("--case", action="append")
+    depth_binding.add_argument("--html", action="store_true")
     depth_summary=commands.add_parser("case-depth-summary",help="Summarize retained complete/incomplete bounds separately without search, interpolation or safety claims")
     depth_summary.add_argument("report",type=Path)
     depth_summary.add_argument("--html",action="store_true")
@@ -550,6 +555,11 @@ def main(argv: list[str] | None = None) -> int:
             result = select_depth_cases(read_json(args.report), args.case)
             print(render_case_depths(result) if args.html else json.dumps(result, indent=2))
             return 0
+        if args.command == "inspect-depth-binding":
+            from .depth_binding import inspect_depth_binding, render_depth_binding
+            result = inspect_depth_binding(read_json(args.manifest), read_json(args.report), args.case)
+            print(render_depth_binding(result) if args.html else json.dumps(result, indent=2))
+            return 0 if result['matches_declarations'] else 1
         if args.command == "case-depth-summary":
             from .depth_summary import summarize_depths,render_depth_summary
             result=summarize_depths(read_json(args.report))
