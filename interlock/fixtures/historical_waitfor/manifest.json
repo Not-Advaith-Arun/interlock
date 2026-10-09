@@ -1,0 +1,213 @@
+{
+  "format": "interlock-cpython-waitfor-sources/v1",
+  "contract": "interlock-cpython-waitfor-86296/v1",
+  "issue": "https://github.com/python/cpython/issues/86296",
+  "parent": "226484e47599a93f5bf033ac47198e68ff401432",
+  "fix": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+  "contract_sha256": "87fe3561b6164f2c29ecbc4055054239dddfbab36c3ae231c0944e65791a9696",
+  "source_pins": [
+    {
+      "role": "parent",
+      "revision": "226484e47599a93f5bf033ac47198e68ff401432",
+      "path": "LICENSE",
+      "bytes": 13936,
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "github_blob_sha": "f26bcf4d2de6eb136e31006ca3ab447d5e488adf",
+      "url": "https://raw.githubusercontent.com/python/cpython/226484e47599a93f5bf033ac47198e68ff401432/LICENSE"
+    },
+    {
+      "role": "parent",
+      "revision": "226484e47599a93f5bf033ac47198e68ff401432",
+      "path": "Lib/asyncio/tasks.py",
+      "bytes": 33951,
+      "sha256": "72d0302dbef63b293f1234927413a7fb60e84909bc91ed275cf5a7e8f3be3c18",
+      "github_blob_sha": "e78719de216fd00479bac8d01d73ae6b82343cfb",
+      "url": "https://raw.githubusercontent.com/python/cpython/226484e47599a93f5bf033ac47198e68ff401432/Lib/asyncio/tasks.py"
+    },
+    {
+      "role": "parent",
+      "revision": "226484e47599a93f5bf033ac47198e68ff401432",
+      "path": "Lib/test/test_asyncio/test_waitfor.py",
+      "bytes": 8671,
+      "sha256": "40d19d142f4663bb0c9862f9311a35a269d1cbb114a22d72963641745c8271d3",
+      "github_blob_sha": "45498fa097f6bccab7c7e3781fdd4f857c334a75",
+      "url": "https://raw.githubusercontent.com/python/cpython/226484e47599a93f5bf033ac47198e68ff401432/Lib/test/test_asyncio/test_waitfor.py"
+    },
+    {
+      "role": "parent",
+      "revision": "226484e47599a93f5bf033ac47198e68ff401432",
+      "path": "Lib/asyncio/timeouts.py",
+      "bytes": 4556,
+      "sha256": "cf14e3b302f0935aa0bda757a4bd1509ce660eb3b6856283fbc4c9ca531f8095",
+      "github_blob_sha": "94d25535fbc0595760877415166bfc8edd6ba1a8",
+      "url": "https://raw.githubusercontent.com/python/cpython/226484e47599a93f5bf033ac47198e68ff401432/Lib/asyncio/timeouts.py"
+    },
+    {
+      "role": "fix",
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "path": "LICENSE",
+      "bytes": 13936,
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "github_blob_sha": "f26bcf4d2de6eb136e31006ca3ab447d5e488adf",
+      "url": "https://raw.githubusercontent.com/python/cpython/a5024a261a75dafa4fb6613298dcb64a9603d9c7/LICENSE"
+    },
+    {
+      "role": "fix",
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "path": "Lib/asyncio/tasks.py",
+      "bytes": 33125,
+      "sha256": "da56160196131951475e653404857d79a644252134ea37db29943560acb2affa",
+      "github_blob_sha": "a2e06d5ef72f42f7227cc4f337d819c7f1efcb51",
+      "url": "https://raw.githubusercontent.com/python/cpython/a5024a261a75dafa4fb6613298dcb64a9603d9c7/Lib/asyncio/tasks.py"
+    },
+    {
+      "role": "fix",
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "path": "Lib/test/test_asyncio/test_waitfor.py",
+      "bytes": 11255,
+      "sha256": "f7dc724fe3997112ba04523cd928cbd899109b484829e7293eaef6e80b7a4ec0",
+      "github_blob_sha": "ed80540b2b38520e98891c509859009152f205e9",
+      "url": "https://raw.githubusercontent.com/python/cpython/a5024a261a75dafa4fb6613298dcb64a9603d9c7/Lib/test/test_asyncio/test_waitfor.py"
+    },
+    {
+      "role": "fix",
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "path": "Lib/asyncio/timeouts.py",
+      "bytes": 4556,
+      "sha256": "cf14e3b302f0935aa0bda757a4bd1509ce660eb3b6856283fbc4c9ca531f8095",
+      "github_blob_sha": "94d25535fbc0595760877415166bfc8edd6ba1a8",
+      "url": "https://raw.githubusercontent.com/python/cpython/a5024a261a75dafa4fb6613298dcb64a9603d9c7/Lib/asyncio/timeouts.py"
+    }
+  ],
+  "changes": "Only named definitions were extracted; regression method was dedented from its class. Comments identify provenance. Dependencies are explicitly bound to recorded host stdlib objects; no whole upstream module is imported. All function bodies otherwise unchanged.",
+  "files": {
+    "before.py": {
+      "sha256": "2e9a08c6d49dc1eff5bbf5c8e5080acd79a57f91bef4eae19cbd42688e1917fa",
+      "bytes": 3046,
+      "revision": "226484e47599a93f5bf033ac47198e68ff401432",
+      "source_path": "Lib/asyncio/tasks.py",
+      "source_sha256": "72d0302dbef63b293f1234927413a7fb60e84909bc91ed275cf5a7e8f3be3c18",
+      "segments": [
+        {
+          "name": "_release_waiter",
+          "first_line": 424,
+          "last_line": 426,
+          "original_sha256": "68cd6674357ab432e9c2eef9f43671c13c2312fe49baf7a396d98826fc0b69ac",
+          "extracted_sha256": "68cd6674357ab432e9c2eef9f43671c13c2312fe49baf7a396d98826fc0b69ac",
+          "dedented": false
+        },
+        {
+          "name": "wait_for",
+          "first_line": 429,
+          "last_line": 497,
+          "original_sha256": "2e3efae791fd8896c9e4b594bde9d03a62a6b1986ad11390d31523fe43a85c37",
+          "extracted_sha256": "2e3efae791fd8896c9e4b594bde9d03a62a6b1986ad11390d31523fe43a85c37",
+          "dedented": false
+        },
+        {
+          "name": "_cancel_and_wait",
+          "first_line": 544,
+          "last_line": 557,
+          "original_sha256": "1c5cefcd7d0dd8ffaee3f27482c64d3beef4dd88a92906fdb73d362a30d44e7f",
+          "extracted_sha256": "1c5cefcd7d0dd8ffaee3f27482c64d3beef4dd88a92906fdb73d362a30d44e7f",
+          "dedented": false
+        }
+      ]
+    },
+    "fix.py": {
+      "sha256": "c054f5a30e724efa8ee4344bfe26752483f47ecb25fc843c8d98d0247444c3d6",
+      "bytes": 2198,
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "source_path": "Lib/asyncio/tasks.py",
+      "source_sha256": "da56160196131951475e653404857d79a644252134ea37db29943560acb2affa",
+      "segments": [
+        {
+          "name": "_release_waiter",
+          "first_line": 425,
+          "last_line": 427,
+          "original_sha256": "68cd6674357ab432e9c2eef9f43671c13c2312fe49baf7a396d98826fc0b69ac",
+          "extracted_sha256": "68cd6674357ab432e9c2eef9f43671c13c2312fe49baf7a396d98826fc0b69ac",
+          "dedented": false
+        },
+        {
+          "name": "wait_for",
+          "first_line": 430,
+          "last_line": 478,
+          "original_sha256": "17631cb8814fcf0d61cc0a8287bc17bec53548b9c4af2f97f0bda0d93743a2bc",
+          "extracted_sha256": "17631cb8814fcf0d61cc0a8287bc17bec53548b9c4af2f97f0bda0d93743a2bc",
+          "dedented": false
+        },
+        {
+          "name": "_cancel_and_wait",
+          "first_line": 524,
+          "last_line": 538,
+          "original_sha256": "bfcaeb1cfe46d11aa493cc4c527028bc1c112ee865709562ddcc23ba15a2eaae",
+          "extracted_sha256": "bfcaeb1cfe46d11aa493cc4c527028bc1c112ee865709562ddcc23ba15a2eaae",
+          "dedented": false
+        }
+      ]
+    },
+    "timeouts.py": {
+      "sha256": "5d6a81fb9628159a83aaaa55d7a92346362b8cf8e4587ac5ec0a697559f9cda5",
+      "bytes": 4591,
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "source_path": "Lib/asyncio/timeouts.py",
+      "source_sha256": "cf14e3b302f0935aa0bda757a4bd1509ce660eb3b6856283fbc4c9ca531f8095",
+      "segments": [
+        {
+          "name": "_State",
+          "first_line": 18,
+          "last_line": 23,
+          "original_sha256": "d4549691bfea4c061fee59c9f4a81c202f59ab857e2587a726c8a7159c554245",
+          "extracted_sha256": "d4549691bfea4c061fee59c9f4a81c202f59ab857e2587a726c8a7159c554245",
+          "dedented": false
+        },
+        {
+          "name": "Timeout",
+          "first_line": 26,
+          "last_line": 109,
+          "original_sha256": "0a8afc8703a1a6406754687a64f0537ab1c0ff53d72adf756fe175364d766564",
+          "extracted_sha256": "0a8afc8703a1a6406754687a64f0537ab1c0ff53d72adf756fe175364d766564",
+          "dedented": false
+        },
+        {
+          "name": "timeout",
+          "first_line": 112,
+          "last_line": 129,
+          "original_sha256": "63f24fef4a7c2512bbd8f2da019e96f0ea6e88d7d46c2471e59fd1e9ea18d0a6",
+          "extracted_sha256": "63f24fef4a7c2512bbd8f2da019e96f0ea6e88d7d46c2471e59fd1e9ea18d0a6",
+          "dedented": false
+        },
+        {
+          "name": "timeout_at",
+          "first_line": 132,
+          "last_line": 151,
+          "original_sha256": "c5d5d377098df065ed458d75fc5320774fc2cf564172ca4f5215f3529927cd41",
+          "extracted_sha256": "c5d5d377098df065ed458d75fc5320774fc2cf564172ca4f5215f3529927cd41",
+          "dedented": false
+        }
+      ]
+    },
+    "regression.py": {
+      "sha256": "ce92aed10e06c2a172f734bf0859759ae5a21c4438068c710a1e5ca1a361e736",
+      "bytes": 1118,
+      "revision": "a5024a261a75dafa4fb6613298dcb64a9603d9c7",
+      "source_path": "Lib/test/test_asyncio/test_waitfor.py",
+      "source_sha256": "f7dc724fe3997112ba04523cd928cbd899109b484829e7293eaef6e80b7a4ec0",
+      "segments": [
+        {
+          "name": "test_wait_for_issue86296",
+          "first_line": 281,
+          "last_line": 307,
+          "original_sha256": "421a298ec82eead3f3250785663747bb0d57e42498f1e92268b8db9f923c81c2",
+          "extracted_sha256": "3a9e48685dcb28434518a5595587587b26fd46ab117d84554b9f8ec31c3e8844",
+          "dedented": true
+        }
+      ]
+    },
+    "LICENSE": {
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "bytes": 13936
+    }
+  }
+}

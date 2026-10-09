@@ -19,6 +19,8 @@ class EndToEndTests(unittest.TestCase):
     def test_bundled_handler_corpus_and_historical_calibration(self):
         report = self.cli("suite", "--json")
         self.assertEqual(report["status"], "passed")
+        historical = self.cli("historical-waitfor", "--json")
+        self.assertEqual(historical["status"], "calibrated")
 
     def test_generate_check_replay_and_refuse_stale_witness(self):
         with tempfile.TemporaryDirectory() as directory:

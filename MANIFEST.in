@@ -1,0 +1,5 @@
+recursive-include tests *.py
+include examples/*.json
+include examples/source-patches/*.patch
+include interlock/fixtures/historical_waitfor/LICENSE
+include interlock/fixtures/historical_waitfor/manifest.json

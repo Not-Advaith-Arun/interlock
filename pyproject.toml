@@ -14,3 +14,6 @@ interlock = "interlock.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["interlock*"]
+
+[tool.setuptools.package-data]
+"interlock.fixtures.historical_waitfor" = ["LICENSE", "manifest.json"]
