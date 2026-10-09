@@ -1,0 +1,11 @@
+--- a/producer.py
++++ b/producer.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ class Producer:
+-    MAX_IN_FLIGHT = 1
++    MAX_IN_FLIGHT = 2
+ 
+     def __init__(self, transport):
+         self.transport = transport

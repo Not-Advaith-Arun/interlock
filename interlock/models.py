@@ -3,6 +3,8 @@
 from typing import Any, Protocol
 
 from .multijob import MultiJobModel
+from .multijob_retry import MultiJobRetryModel
+from .retry_envelope import RetryEnvelopeModel
 
 State = dict[str, Any]
 Config = dict[str, Any]
@@ -160,4 +162,6 @@ class FiniteStateModel:
 
 
 MODELS: dict[str, Model] = {"retry-v1": RetryModel(), "fsm-v1": FiniteStateModel(),
-                           "cancellation-v1": CancellationModel(), "multi-job-v1": MultiJobModel()}
+                           "cancellation-v1": CancellationModel(), "multi-job-v1": MultiJobModel(),
+                           "multi-job-retry-v1": MultiJobRetryModel(),
+                           "multi-job-retry-envelope-v2": RetryEnvelopeModel()}

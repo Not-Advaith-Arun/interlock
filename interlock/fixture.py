@@ -16,6 +16,8 @@ from .models import MODELS
 from .scenario import VERSIONS, canonical, fingerprint, validate_scenario
 from . import cancellation_fixture as cancellation
 from . import multijob_fixture as multijob
+from . import multijob_retry_fixture as multijob_retry
+from . import retry_envelope_fixture as retry_envelope
 from .fixtures.retry import services
 from .fixtures.retry.base.producer import Producer as BaseProducer
 from .fixtures.retry.base.worker import Worker as BaseWorker
@@ -46,7 +48,7 @@ class Revision:
 @dataclass(frozen=True)
 class Fixture:
     configs: dict
-    revisions: dict[str, Revision | cancellation.CallbackRevision | multijob.JobRevision]
+    revisions: dict[str, Revision | cancellation.CallbackRevision | multijob.JobRevision | multijob_retry.RetryJobRevision | retry_envelope.EnvelopeRevision]
     model: str = "retry-v1"
 
 
@@ -76,16 +78,24 @@ FIXED = Fixture(
 )
 FIXTURES = {
     "retry-conflict": CONFLICT, "retry-fixed": FIXED,
+    "retry-envelope-branch-failure": Fixture(retry_envelope.CONFLICT_CONFIGS, retry_envelope.CONFLICT_REVISIONS, "multi-job-retry-envelope-v2"),
+    "retry-envelope-fixed": Fixture(retry_envelope.FIXED_CONFIGS, retry_envelope.FIXED_REVISIONS, "multi-job-retry-envelope-v2"),
     "cancellation-conflict": Fixture(cancellation.CONFLICT_CONFIGS, cancellation.CONFLICT_REVISIONS,
                                      "cancellation-v1"),
     "cancellation-fixed": Fixture(cancellation.FIXED_CONFIGS, cancellation.FIXED_REVISIONS,
                                   "cancellation-v1"),
     "multi-job-conflict": Fixture(multijob.CONFLICT_CONFIGS, multijob.CONFLICT_REVISIONS, "multi-job-v1"),
     "multi-job-fixed": Fixture(multijob.FIXED_CONFIGS, multijob.FIXED_REVISIONS, "multi-job-v1"),
+    "multi-job-retry-conflict": Fixture(multijob_retry.CONFLICT_CONFIGS, multijob_retry.CONFLICT_REVISIONS, "multi-job-retry-v1"),
+    "multi-job-retry-fixed": Fixture(multijob_retry.FIXED_CONFIGS, multijob_retry.FIXED_REVISIONS, "multi-job-retry-v1"),
 }
 
 
 def _case(fixture):
+    if fixture.model == "multi-job-retry-envelope-v2":
+        return retry_envelope.CASE
+    if fixture.model == "multi-job-retry-v1":
+        return multijob_retry.CASE
     if fixture.model == "multi-job-v1":
         return multijob.CASE
     return cancellation.EVIDENCE if fixture.model == "cancellation-v1" else {"kind": "synthetic"}
@@ -103,7 +113,8 @@ def fixture_scenario(name):
 def fixture_catalog():
     return {"format": "interlock-fixtures-v1", "fixtures": [
         {"name": name, "model": fixture.model,
-         "expected_status": "no_interaction_within_bound" if name.endswith("-fixed") else "merge_interaction_found",
+         "expected_status": "branch_failure" if name == "retry-envelope-branch-failure" else
+                            "no_interaction_within_bound" if name.endswith("-fixed") else "merge_interaction_found",
          "case": _case(fixture)}
         for name, fixture in sorted(FIXTURES.items())]}
 
@@ -121,7 +132,12 @@ def source_identity(name):
     """Hash installed bundled source; no path comes from scenario JSON."""
     fixture = FIXTURES[name]
     paths = {"fixture.py", "models.py", "engine.py", "scenario.py", "runner.py"}
-    if fixture.model == "multi-job-v1":
+    if fixture.model == "multi-job-retry-envelope-v2":
+        paths.update(("retry_envelope.py", "retry_envelope_fixture.py", "multijob_retry_fixture.py",
+                      "fixtures/multijob_retry/services.py"))
+    elif fixture.model == "multi-job-retry-v1":
+        paths.update(("multijob_retry.py", "multijob_retry_fixture.py", "fixtures/multijob_retry/services.py"))
+    elif fixture.model == "multi-job-v1":
         paths.update(("multijob.py", "multijob_fixture.py", "fixtures/multijob/services.py"))
     else:
         paths.add("cancellation_fixture.py" if fixture.model == "cancellation-v1" else "fixtures/retry/services.py")
@@ -224,7 +240,9 @@ def replay_fixture(scenario, events, name):
     fixture = validate_fixture(scenario, name)
     modeled = replay(scenario, events)  # Validates event type, count, and legality.
     runtime_type = {"retry-v1": FixtureRuntime, "cancellation-v1": cancellation.CancellationRuntime,
-                    "multi-job-v1": multijob.MultiJobRuntime}[fixture.model]
+                    "multi-job-v1": multijob.MultiJobRuntime,
+                    "multi-job-retry-v1": multijob_retry.MultiJobRetryRuntime,
+                    "multi-job-retry-envelope-v2": retry_envelope.RetryEnvelopeRuntime}[fixture.model]
     runtimes = {version: runtime_type(fixture.revisions[version]) for version in VERSIONS}
     trace = []
     first_mismatch = None

@@ -14,6 +14,9 @@ EXPECTED_WITNESSES = {
     'cancellation-fixed': None,
     'multi-job-conflict': ['submit:a', 'submit:b', 'deliver:b', 'acknowledge:b'],
     'multi-job-fixed': None,
+    'multi-job-retry-conflict': ['submit:a', 'deliver:a:0', 'drop_ack:a:0', 'submit:b',
+                               'deliver:b:0', 'timeout:a:0', 'deliver:a:1'],
+    'multi-job-retry-fixed': None,
 }
 EXIT_CODES = {'passed': 0, 'failed': 1, 'incomplete': 3, 'fixture_mismatch': 4}
 

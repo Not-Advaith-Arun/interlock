@@ -1,0 +1,11 @@
+--- a/worker.py
++++ b/worker.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ class Worker:
+-    RETAIN_ALL_JOBS = True
++    RETAIN_ALL_JOBS = False
+ 
+     def __init__(self, transport, effects):
+         self.transport = transport

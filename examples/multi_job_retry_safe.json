@@ -1,0 +1,23 @@
+{
+  "format": "interlock-scenario-v1",
+  "name": "multi-job-retry-fixed",
+  "model": "multi-job-retry-v1",
+  "versions": {
+    "base": {
+      "max_in_flight": 1,
+      "retain_all_jobs": true
+    },
+    "left": {
+      "max_in_flight": 2,
+      "retain_all_jobs": true
+    },
+    "right": {
+      "max_in_flight": 1,
+      "retain_all_jobs": true
+    },
+    "merged": {
+      "max_in_flight": 2,
+      "retain_all_jobs": true
+    }
+  }
+}

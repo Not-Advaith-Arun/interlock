@@ -68,7 +68,7 @@ def _show_report(report: dict) -> None:
         passed = outcome["passed_explored_states"]
         print(f"  {version:6} {'PASS in explored states' if passed else 'FAIL'}")
     if report["candidate"]:
-        print("Shortest interaction candidate:")
+        print("Shortest schedule-local interaction candidate (independent branch status above still applies):")
         print("  " + " → ".join(report["candidate"]["events"]))
         for version, outcome in report["candidate"]["outcomes"].items():
             print(f"  {version:6} {json.dumps(outcome['state'], sort_keys=True)}")
@@ -82,6 +82,15 @@ def _show_report(report: dict) -> None:
             print(f"  Handler exploration stopped: {checked['coverage']['termination_reason']}")
         if checked.get("reason"):
             print(f"  {checked['reason']}")
+        for version, failure in checked.get("failure_replays", {}).items():
+            failed = [name for name, outcome in failure["observed_outcomes"].items() if not outcome["passed"]]
+            print(f"  Direct {version} failure replay agrees: {str(failure['agreement']).lower()}; "
+                  f"failed versions: {', '.join(failed)} (this schedule only)")
+        if checked.get("envelope_probe"):
+            probe = checked["envelope_probe"]
+            print(f"  Frozen direct probe within requested search depth: {str(probe['within_search_depth']).lower()}; "
+                  f"known unsafe versions: {', '.join(checked['known_unsafe_versions']) or 'none in this probe'}")
+            print("  " + checked["branch_safety_caveat"])
         case = checked.get("case", {})
         if case.get("issue"):
             print(f"  Historical failure reconstruction; synthetic branch split: {case['issue']}")
@@ -135,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--force", action="store_true", help="Allow replacement of existing output files")
     check.add_argument("--fixture", choices=sorted(FIXTURES),
                        help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
-    suite = commands.add_parser("suite", help="Verify all bundled conflict/control expectations in real handlers")
+    suite = commands.add_parser("suite", help="Verify the eight complete bundled conflict/control cases in real handlers")
     suite.add_argument("--fixture", action="append", choices=sorted(EXPECTED_WITNESSES),
                        help="Check only this fixture (repeat to select several; default: all)")
     suite.add_argument("--max-depth", type=int, default=12,
@@ -201,7 +210,8 @@ def main(argv: list[str] | None = None) -> int:
             scenario = validate_scenario(read_json(args.scenario))
             report = run_check(scenario, fixture=args.fixture, max_depth=args.max_depth,
                                max_states=args.max_states, max_schedules=args.max_schedules)
-            witness_allowed = (report["candidate"] is not None
+            witness_allowed = (report["status"] == "merge_interaction_found"
+                               and report["candidate"] is not None
                                and (not args.fixture or report["fixture"]["status"] == "agreement"))
             if args.witness and not witness_allowed and Path(args.witness).exists():
                 raise ValueError("no verified candidate available; refusing to leave an existing witness that describes an older run")

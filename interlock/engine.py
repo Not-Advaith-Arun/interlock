@@ -143,6 +143,8 @@ def search(scenario: dict, max_depth: int = 8, max_states: int = 50_000) -> dict
 
 
 def make_witness(scenario: dict, report: dict) -> dict:
+    if report["status"] != "merge_interaction_found":
+        raise ValueError("merge witness requires complete bounded search with branches safe within the checked bound")
     if report["scenario_sha256"] != fingerprint(scenario):
         raise ValueError("report belongs to a different scenario")
     if report["candidate"] is None:
@@ -151,6 +153,8 @@ def make_witness(scenario: dict, report: dict) -> dict:
                "scenario_sha256": fingerprint(scenario), "events": report["candidate"]["events"]}
     if "fixture" in report:
         checked = report["fixture"]
+        if any(v in checked.get("known_unsafe_versions", []) for v in ("base", "left", "right")):
+            raise ValueError("fixture has an independently replayed unsafe baseline or branch")
         reproduced = checked.get("candidate_replay", {})
         if (checked.get("status") != "agreement"
                 or not report["coverage"]["complete_up_to_depth"]
