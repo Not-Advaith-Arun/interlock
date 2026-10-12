@@ -150,3 +150,19 @@ class EndToEndTests(unittest.TestCase):
                               "--witness", witness, "--json", expected=1)
             self.assertNotEqual(result["status"], "merge_interaction_found")
             self.assertFalse(witness.exists())
+
+
+    def test_depth_budget_exhaustion_cannot_be_reported_as_a_safe_sweep(self):
+        scenario = ROOT / "examples/multi_job_retry_conflict.json"
+        before = scenario.read_bytes()
+        incomplete = self.cli("sweep-depths", scenario, "--depth", "0", "--depth", "12", "--max-states", "1", "--model-only", expected=3)
+        self.assertTrue(incomplete["any_incomplete"])
+        self.assertEqual(incomplete["results"][1]["status"], "incomplete")
+        self.assertFalse(incomplete["results"][1]["coverage"]["complete_up_to_depth"])
+        self.assertIsNone(incomplete["results"][1]["candidate_events"])
+        shallow = self.cli("sweep-depths", scenario, "--depth", "0", "--max-states", "1", "--model-only")
+        self.assertFalse(shallow["any_incomplete"])
+        self.assertFalse(shallow["any_failure"])
+        self.assertEqual(shallow["results"][0]["bounds"]["max_depth"], 0)
+        self.cli("sweep-depths", scenario, "--depth", "0", expected=2)
+        self.assertEqual(scenario.read_bytes(), before)
