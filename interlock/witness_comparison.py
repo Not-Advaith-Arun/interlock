@@ -3,7 +3,9 @@ from .engine import replay_witness
 from .scenario import fingerprint
 
 
-def compare_witnesses(left, right, *, fixture=None):
+def compare_witnesses(left, right, *, fixture=None, require_pin=False):
+    if require_pin and fixture is None:
+        raise ValueError("source pin requirement needs a fixture")
     one, two = replay_witness(left), replay_witness(right)
     identity = fingerprint(left["scenario"])
     if identity != fingerprint(right["scenario"]):
@@ -14,6 +16,8 @@ def compare_witnesses(left, right, *, fixture=None):
         # Validate both bindings before constructing either set of handlers.
         provenance = {"left": validate_witness_fixture(left, fixture),
                       "right": validate_witness_fixture(right, fixture)}
+        if require_pin and any(value != "verified" for value in provenance.values()):
+            raise ValueError("source-pinned witnesses required by --require-pin")
         one = replay_fixture(left["scenario"], left["events"], fixture)
         two = replay_fixture(right["scenario"], right["events"], fixture)
     def outcomes(frame):

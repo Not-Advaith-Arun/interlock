@@ -187,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     reproduce = commands.add_parser("replay", help="Replay a self-contained witness")
     reproduce.add_argument("witness")
     reproduce.add_argument("--json", action="store_true")
+    reproduce.add_argument("--require-pin", action="store_true", help="Require verified source binding before trusted handler execution; requires --fixture")
     reproduce.add_argument("--summary", action="store_true", help="Emit compact JSON outcomes without detailed trace/state; perform the same full requested replay")
     replay_mode = reproduce.add_mutually_exclusive_group()
     replay_mode.add_argument("--fixture", choices=sorted(FIXTURES),
@@ -208,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated schedules with explicit model or trusted bundled-handler scope")
     comparison.add_argument("left")
     comparison.add_argument("right")
+    comparison.add_argument("--require-pin", action="store_true", help="Require both verified source bindings; requires --fixture")
     compare_mode = comparison.add_mutually_exclusive_group(required=True)
     compare_mode.add_argument("--model-only", action="store_true")
     compare_mode.add_argument("--fixture", choices=sorted(FIXTURES), help="Opt in to both schedules' trusted bundled handlers; imported code is never executed")
@@ -228,11 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     view_mode = view.add_mutually_exclusive_group(required=True)
     view_mode.add_argument("--model-only", action="store_true")
     view_mode.add_argument("--fixture", choices=sorted(FIXTURES))
+    view.add_argument("--require-pin", action="store_true", help="Require verified source binding before HTML handler replay; requires --fixture")
     view.add_argument("--max-frames", type=int, default=100)
     view.add_argument("--output", help="Atomically save HTML to a distinct local file instead of stdout")
     view.add_argument("--force", action="store_true", help="Allow replacement of an existing HTML file")
     args = parser.parse_args(argv)
     try:
+        if getattr(args, "require_pin", False) and not args.fixture:
+            raise ValueError("--require-pin requires --fixture")
         if args.command == "sweep-depths":
             from .depth_sweep import sweep_depths
             result = sweep_depths(read_json(args.scenario), args.depth, args.max_states, profile=args.profile,
@@ -245,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "compare-witnesses":
             from .witness_comparison import compare_witnesses
-            result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES), fixture=args.fixture)
+            result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES), fixture=args.fixture, require_pin=args.require_pin)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0
         if args.command == "view-witness":
@@ -255,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
             result = replay_witness(witness)
             if args.fixture:
                 provenance = validate_witness_fixture(witness, args.fixture)
+                if args.require_pin and provenance != "verified":
+                    raise ValueError("source-pinned witness required by --require-pin")
                 result = replay_fixture(witness["scenario"], witness["events"], args.fixture)
                 result["source_verification"] = provenance
                 result["execution_scope"] = "bundled_handlers"
@@ -397,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
                              f"use --fixture {witness['fixture']['name']} or --model-only")
         if args.fixture:
             provenance = validate_witness_fixture(witness, args.fixture)
+            if args.require_pin and provenance != "verified":
+                raise ValueError("source-pinned witness required by --require-pin")
             result = replay_fixture(witness["scenario"], witness["events"], args.fixture)
             result["source_verification"] = provenance
             if args.summary:

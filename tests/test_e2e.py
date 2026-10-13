@@ -20,6 +20,31 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout) if result.stdout.lstrip().startswith("{") else result.stdout
 
+    def test_explicit_pin_policy_rejects_legacy_handlers_before_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pinned, legacy, html = root / "pinned.json", root / "legacy.json", root / "review.html"
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", "multi-job-retry-conflict",
+                     "--witness", pinned, "--json", expected=1)
+            value = json.loads(pinned.read_text())
+            legacy.write_text(json.dumps({"format":"interlock-witness-v1", "scenario":value["scenario"],
+                "scenario_sha256":value["scenario_sha256"], "events":value["events"]}))
+            originals = {p:p.read_bytes() for p in (pinned,legacy)}
+            compatible = self.cli("replay", legacy, "--fixture", "multi-job-retry-conflict", "--summary", expected=1)
+            self.assertEqual(compatible["source_verification"], "unpinned")
+            self.cli("replay", legacy, "--fixture", "multi-job-retry-conflict", "--require-pin", "--json", expected=2)
+            self.cli("replay", pinned, "--model-only", "--require-pin", expected=2)
+            self.cli("view-witness", legacy, "--fixture", "multi-job-retry-conflict", "--require-pin", "--output", html, expected=2)
+            self.assertFalse(html.exists())
+            self.cli("compare-witnesses", pinned, legacy, "--fixture", "multi-job-retry-conflict", "--require-pin", expected=2)
+            strict = self.cli("replay", pinned, "--fixture", "multi-job-retry-conflict", "--require-pin", "--summary", expected=1)
+            self.assertEqual(strict["source_verification"], "verified")
+            self.cli("view-witness", pinned, "--fixture", "multi-job-retry-conflict", "--require-pin", "--output", html)
+            self.assertIn("source identity: verified", html.read_text())
+            compared = self.cli("compare-witnesses", pinned, pinned, "--fixture", "multi-job-retry-conflict", "--require-pin")
+            self.assertEqual(compared["source_verification"], {"left":"verified", "right":"verified"})
+            self.assertEqual({p:p.read_bytes() for p in originals}, originals)
+
     def test_html_review_file_publication_preserves_existing_and_input_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
