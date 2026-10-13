@@ -20,6 +20,45 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout) if result.stdout.lstrip().startswith("{") else result.stdout
 
+    def test_ambiguous_json_witnesses_fail_before_replay_or_artifact_replacement(self):
+        # Ambiguous serialized identities are a security boundary. Exercise real
+        # CLI intake rather than only the duplicate-key parser in isolation.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pinned, imported, output = root / "pinned.json", root / "imported.json", root / "retained.html"
+            self.cli("check",ROOT / "examples/multi_job_retry_conflict.json","--fixture","multi-job-retry-conflict",
+                     "--witness",pinned,"--json",expected=1)
+            original = pinned.read_bytes()
+            raw = json.dumps(json.loads(original))
+            variants = [raw.replace('"events":', '"events": [], "events":',1),
+                        raw.replace('"model":', '"model": "retry-v1", "mo\\u0064el":',1)]
+            output.write_text("Retain independently reviewed artifact")
+            saved = output.read_bytes()
+            for value in variants:
+                imported.write_text(value)
+                before = imported.read_bytes()
+                commands = [("replay",imported,"--fixture","multi-job-retry-conflict","--json"),
+                            ("view-witness",imported,"--fixture","multi-job-retry-conflict","--output",output,"--force"),
+                            ("minimize",imported,"--model-only","--report",output,"--force","--json"),
+                            ("compare-witnesses",pinned,imported,"--model-only")]
+                for args in commands:
+                    result = subprocess.run([sys.executable,"-m","interlock",*map(str,args)],cwd=ROOT,
+                                            capture_output=True,text=True,timeout=5)
+                    self.assertEqual(result.returncode,2,result.stdout+result.stderr)
+                    self.assertIn("duplicate JSON field",result.stderr)
+                    self.assertEqual(result.stdout,"")
+                    self.assertEqual(output.read_bytes(),saved)
+                    self.assertEqual(imported.read_bytes(),before)
+            scenario = root / "scenario.json"
+            value = json.loads(original)["scenario"]
+            scenario.write_text(json.dumps(value).replace('"name":','"name": "shadow", "na\\u006de":',1))
+            result = subprocess.run([sys.executable,"-m","interlock","check",str(scenario),"--report",str(output),"--force","--json"],
+                                    cwd=ROOT,capture_output=True,text=True,timeout=5)
+            self.assertEqual(result.returncode,2,result.stdout+result.stderr)
+            self.assertIn("duplicate JSON field",result.stderr)
+            self.assertEqual(output.read_bytes(),saved)
+            self.assertEqual(pinned.read_bytes(),original)
+
     def test_explicit_pin_policy_rejects_legacy_handlers_before_output(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
