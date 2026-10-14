@@ -32,6 +32,13 @@ class EndToEndTests(unittest.TestCase):
             replayed = self.cli("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
             self.assertTrue(replayed["interaction_reproduced"])
             original = witness.read_bytes()
+            report = Path(directory) / "report.json"
+            report.write_text("preserve prior report")
+            for invalid in (Path(directory), witness / "child.json"):
+                self.cli("check", scenario, "--fixture", "multi-job-retry-conflict", "--report", report,
+                         "--witness", invalid, "--force", "--json", expected=2)
+                self.assertEqual(report.read_text(), "preserve prior report")
+                self.assertEqual(witness.read_bytes(), original)
             self.cli("check", ROOT / "examples/retry_safe.json", "--witness", witness,
                      "--force", "--json", expected=2)
             self.assertEqual(witness.read_bytes(), original)

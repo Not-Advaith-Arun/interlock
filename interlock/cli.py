@@ -51,6 +51,13 @@ def _validate_outputs(source: str | None, outputs: list[str], force: bool) -> No
     for path in map(Path, outputs):
         if path.is_symlink():
             raise ValueError(f"refusing symlink output: {path}")
+        if path.exists() and not path.is_file():
+            raise ValueError(f"output must be a regular file: {path}")
+        parent = path.parent
+        while not parent.exists() and parent != parent.parent:
+            parent = parent.parent
+        if not parent.is_dir():
+            raise ValueError(f"output parent must be a directory: {parent}")
         if path.exists() and not force:
             raise ValueError(f"output already exists: {path}; choose a fresh path or use --force")
 
