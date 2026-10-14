@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import stat
 from typing import Any
 
 from .models import MODELS
@@ -57,7 +59,10 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict:
 def read_json(path: str | Path, *, max_bytes: int = MAX_INPUT_BYTES) -> Any:
     if type(max_bytes) is not int or max_bytes < 1:
         raise ValueError("input size limit must be a positive integer")
-    with Path(path).open("rb") as stream:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("scenario and witness inputs must be regular files")
         raw = stream.read(max_bytes + 1)
     if len(raw) > max_bytes:
         raise ValueError(f"input exceeds {max_bytes / 1_000_000:g} MB limit")

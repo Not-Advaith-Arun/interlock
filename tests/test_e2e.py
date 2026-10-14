@@ -1,5 +1,6 @@
 """CLI journeys through exploration, real handlers, exported witnesses and replay."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -10,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class EndToEndTests(unittest.TestCase):
-    def cli(self, *args, expected=0):
+    def cli(self, *args, expected=0, timeout=60):
         result = subprocess.run([sys.executable, "-m", "interlock", *map(str, args)],
-                                cwd=ROOT, capture_output=True, text=True, timeout=60)
+                                cwd=ROOT, capture_output=True, text=True, timeout=timeout)
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout) if result.stdout.lstrip().startswith("{") else result.stdout
 
@@ -32,6 +33,11 @@ class EndToEndTests(unittest.TestCase):
             replayed = self.cli("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
             self.assertTrue(replayed["interaction_reproduced"])
             original = witness.read_bytes()
+            fifo = Path(directory) / "unavailable.json"
+            os.mkfifo(fifo)
+            self.cli("check", fifo, "--witness", witness, "--force", "--json", expected=2, timeout=3)
+            self.cli("replay", fifo, "--json", expected=2, timeout=3)
+            self.assertEqual(witness.read_bytes(), original)
             report = Path(directory) / "report.json"
             report.write_text("preserve prior report")
             for invalid in (Path(directory), witness / "child.json"):
