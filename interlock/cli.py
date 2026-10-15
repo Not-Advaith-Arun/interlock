@@ -181,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
                        help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
     cases = commands.add_parser("check-cases", help="Run a caller-authored bounded model regression manifest with expected classifications")
     cases.add_argument("manifest")
+    cases.add_argument("--case", action="append", help="Run only these existing case IDs; full manifest still validates")
     cases.add_argument("--max-depth", type=int, default=8)
     cases.add_argument("--max-states", type=int, default=25000)
     cases.add_argument("--report")
@@ -395,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check-cases":
             from .model_cases import check_cases
             _validate_outputs(args.manifest, [args.report] if args.report else [], args.force)
-            result = check_cases(read_json(args.manifest), max_depth=args.max_depth, max_states=args.max_states)
+            result = check_cases(read_json(args.manifest), max_depth=args.max_depth, max_states=args.max_states, selected_ids=args.case)
             if args.report:
                 _write(args.report, result, args.force)
             print(json.dumps(result, indent=2, sort_keys=True))

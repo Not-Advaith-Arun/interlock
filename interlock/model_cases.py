@@ -5,7 +5,7 @@ from .model_batch import check_many
 EXPECTED = {"merge_interaction_found", "no_interaction_within_bound", "baseline_failure", "branch_failure"}
 
 
-def check_cases(manifest, *, max_depth=8, max_states=25000):
+def check_cases(manifest, *, max_depth=8, max_states=25000, selected_ids=None):
     if not isinstance(manifest, dict) or set(manifest) != {"format", "cases"} or manifest["format"] != "interlock-model-cases-v1":
         raise ValueError("expected interlock-model-cases-v1 with cases")
     cases = manifest["cases"]
@@ -20,6 +20,19 @@ def check_cases(manifest, *, max_depth=8, max_states=25000):
         if case["id"] in identities:
             raise ValueError("duplicate model case ID")
         identities.add(case["id"])
+    if selected_ids is not None:
+        if (not isinstance(selected_ids,list) or not 1 <= len(selected_ids) <= 8
+                or any(not isinstance(key,str) or key not in identities for key in selected_ids)
+                or len(set(selected_ids)) != len(selected_ids)):
+            raise ValueError("select1..8 distinct existing model case IDs")
+        # Validate even omitted declarations before any selected search begins.
+        from .scenario import fingerprint, validate_scenario
+        for case in cases:
+            validate_scenario(case["scenario"])
+        hashes = [fingerprint(case["scenario"]) for case in cases]
+        if len(set(hashes)) != len(hashes):
+            raise ValueError("selected scenarios must have distinct canonical identities")
+        cases = [case for case in cases if case["id"] in selected_ids]
     checked = check_many([case["scenario"] for case in cases], max_depth=max_depth, max_states=max_states)
     rows = []
     for case, result in zip(cases, checked["cases"]):
@@ -29,4 +42,6 @@ def check_cases(manifest, *, max_depth=8, max_states=25000):
     status = "incomplete" if any(row["verdict"] == "incomplete" for row in rows) else "unexpected" if any(row["verdict"] == "unexpected" for row in rows) else "passed"
     return {"format":"interlock-model-cases-report-v1","status":status,"cases":rows,
             "execution_scope":"model_only","source_verification":"not_checked",
-            "scope":"Caller-supplied expected bounded model classifications only. Passing means observations matched expectations, including explicitly expected unsafe baseline/branch cases; it is not a safety verdict. Incomplete searches never pass and cannot be configured as expected success. Each full model report retains independent branch results and coverage. No handlers, source pins, imported code, witness publication or general safety proof."}
+            "selected_case_ids":[case["id"] for case in cases],"manifest_cases":len(manifest["cases"]),
+            "omitted_cases":len(manifest["cases"])-len(cases),
+            "scope":"Omitted cases are not executed or assessed; all declarations still validate. Caller-supplied expected bounded model classifications only. Passing means observations matched expectations, including explicitly expected unsafe baseline/branch cases; it is not a safety verdict. Incomplete searches never pass and cannot be configured as expected success. Each full model report retains independent branch results and coverage. No handlers, source pins, imported code, witness publication or general safety proof."}
