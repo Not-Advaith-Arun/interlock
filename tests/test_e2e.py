@@ -33,6 +33,36 @@ class EndToEndTests(unittest.TestCase):
             replayed = self.cli("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
             self.assertTrue(replayed["interaction_reproduced"])
             original = witness.read_bytes()
+            reduced = self.cli("minimize", witness, "--model-only", "--json")
+            self.assertTrue(reduced["one_event_deletion_minimal"])
+            self.assertEqual(reduced["reduced_events"], json.loads(original)["events"])
+            self.assertEqual(reduced["source_verification"], "not_checked")
+            self.cli("minimize", witness, "--json", expected=2)
+            self.cli("minimize", witness, "--model-only", "--report", witness, "--force", expected=2)
+            self.assertEqual(witness.read_bytes(), original)
+            imported = {key: value for key, value in json.loads(original).items()
+                        if key in ("format", "scenario", "scenario_sha256", "events")}
+            imported["format"] = "interlock-witness-v1"
+            imported["events"].append("acknowledge:a:1")
+            padded = Path(directory) / "imported.json"
+            padded.write_text(json.dumps(imported))
+            padded_bytes = padded.read_bytes()
+            reduced = self.cli("minimize", padded, "--model-only", "--json")
+            self.assertGreater(reduced["removed_events"], 0)
+            self.assertTrue(reduced["one_event_deletion_minimal"])
+            self.assertTrue(reduced["replay"]["interaction_reproduced"])
+            capped = self.cli("minimize", padded, "--model-only", "--max-attempts", "1", "--json", expected=3)
+            self.assertFalse(capped["one_event_deletion_minimal"])
+            self.assertEqual(capped["status"], "budget_exhausted")
+            self.assertEqual(padded.read_bytes(), padded_bytes)
+            diagnostic = Path(directory) / "reduced-report.json"
+            self.cli("minimize", padded, "--model-only", "--report", diagnostic, "--json")
+            self.assertEqual(json.loads(diagnostic.read_text())["format"], "interlock-trace-reduction-v1")
+            tampered = json.loads(original)
+            tampered["events"].append("acknowledge:a:1")
+            invalid = Path(directory) / "invalid-witness.json"
+            invalid.write_text(json.dumps(tampered))
+            self.cli("minimize", invalid, "--model-only", "--json", expected=2)
             fifo = Path(directory) / "unavailable.json"
             os.mkfifo(fifo)
             self.cli("check", fifo, "--witness", witness, "--force", "--json", expected=2, timeout=3)

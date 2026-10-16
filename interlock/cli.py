@@ -174,8 +174,31 @@ def main(argv: list[str] | None = None) -> int:
                            help="Opt in to replaying this witness against trusted bundled handlers")
     replay_mode.add_argument("--model-only", action="store_true",
                              help="Replay only the embedded model, without checking pinned fixture sources")
+    minimize = commands.add_parser("minimize", help="Reduce an imported interaction trace; model-only diagnostic, not a new witness")
+    minimize.add_argument("witness")
+    minimize.add_argument("--model-only", action="store_true", required=True,
+                          help="Acknowledge that pinned sources and actual handlers will not be checked")
+    minimize.add_argument("--max-attempts", type=int, default=500)
+    minimize.add_argument("--json", action="store_true")
+    minimize.add_argument("--report", help="Write a diagnostic report, not a publishable witness")
+    minimize.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "minimize":
+            from .reduction import reduce_witness
+            _validate_outputs(args.witness, [args.report] if args.report else [], args.force)
+            witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
+            result = reduce_witness(witness, args.max_attempts)
+            if args.report:
+                _write(args.report, result, args.force)
+            if args.json:
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                print(f"Trace reduction: {result['status']}; removed {result['removed_events']} events "
+                      f"in {result['attempts']} attempts.")
+                print("  " + " → ".join(result["reduced_events"]))
+                print(result["scope"])
+            return 0 if result["one_event_deletion_minimal"] else 3
         if args.command == "historical-waitfor":
             from .historical_waitfor import EXIT_CODES, run_calibration
             _validate_outputs(None, [args.report] if args.report else [], args.force)
