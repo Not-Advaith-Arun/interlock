@@ -7,6 +7,8 @@ import sys
 import tempfile
 import unittest
 
+from interlock.scenario import fingerprint
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -63,6 +65,21 @@ class EndToEndTests(unittest.TestCase):
             invalid = Path(directory) / "invalid-witness.json"
             invalid.write_text(json.dumps(tampered))
             self.cli("minimize", invalid, "--model-only", "--json", expected=2)
+            pinned = json.loads(original)
+            pinned["events"].append("acknowledge:a:1")
+            pinned["witness_sha256"] = fingerprint({k:v for k,v in pinned.items() if k != "witness_sha256"})
+            pinned_file = Path(directory) / "padded-pinned.json"
+            pinned_file.write_text(json.dumps(pinned))
+            checked_reduction = self.cli("minimize", pinned_file, "--fixture", "multi-job-retry-conflict", "--json")
+            self.assertGreater(checked_reduction["removed_events"], 0)
+            self.assertEqual(checked_reduction["source_verification"], "verified")
+            self.assertTrue(checked_reduction["handler_replay"]["interaction_reproduced"])
+            self.assertIsNone(checked_reduction["first_mismatch"])
+            self.cli("minimize", padded, "--fixture", "multi-job-retry-conflict", "--json", expected=2)
+            pinned["fixture"]["source_identity"]["deliberately_invalid"] = True
+            pinned["witness_sha256"] = fingerprint({k:v for k,v in pinned.items() if k != "witness_sha256"})
+            pinned_file.write_text(json.dumps(pinned))
+            self.cli("minimize", pinned_file, "--fixture", "multi-job-retry-conflict", "--json", expected=2)
             fifo = Path(directory) / "unavailable.json"
             os.mkfifo(fifo)
             self.cli("check", fifo, "--witness", witness, "--force", "--json", expected=2, timeout=3)
