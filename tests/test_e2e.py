@@ -29,9 +29,15 @@ class EndToEndTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             scenario, witness = Path(directory) / "scenario.json", Path(directory) / "witness.json"
             self.cli("example", "multi-job-retry-conflict", "--output", scenario)
+            profiling = ("--profile",) if sys.platform.startswith("linux") else ()
             checked = self.cli("check", scenario, "--fixture", "multi-job-retry-conflict",
-                               "--witness", witness, "--json", expected=1)
+                               "--witness", witness, *profiling, "--json", expected=1)
             self.assertEqual(checked["status"], "merge_interaction_found")
+            if profiling:
+                self.assertGreaterEqual(checked["measurements"]["wall_seconds"], 0)
+                self.assertGreaterEqual(checked["measurements"]["process_cpu_seconds"], 0)
+                self.assertGreater(checked["measurements"]["process_peak_rss_bytes"], 0)
+                self.assertEqual(checked["measurements"]["platform"], "linux")
             replayed = self.cli("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
             self.assertTrue(replayed["interaction_reproduced"])
             original = witness.read_bytes()

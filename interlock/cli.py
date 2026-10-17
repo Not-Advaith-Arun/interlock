@@ -146,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     example.add_argument("--force", action="store_true", help="Allow replacement of an existing output")
     check = commands.add_parser("check", help="Explore base, left, right, and merged together")
     check.add_argument("scenario")
+    check.add_argument("--profile", action="store_true", help="Record checker wall/CPU and process-lifetime Linux peak RSS")
     check.add_argument("--max-depth", type=int, default=8)
     check.add_argument("--max-states", type=int, default=50_000)
     check.add_argument("--max-schedules", type=int,
@@ -259,8 +260,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check":
             _validate_outputs(args.scenario, [path for path in (args.report, args.witness) if path], args.force)
             scenario = validate_scenario(read_json(args.scenario))
-            report = run_check(scenario, fixture=args.fixture, max_depth=args.max_depth,
-                               max_states=args.max_states, max_schedules=args.max_schedules)
+            def execute():
+                return run_check(scenario, fixture=args.fixture, max_depth=args.max_depth,
+                                 max_states=args.max_states, max_schedules=args.max_schedules)
+            if args.profile:
+                from .profiling import profile_check
+                report = profile_check(execute)
+            else:
+                report = execute()
             witness_allowed = (report["status"] == "merge_interaction_found"
                                and report["candidate"] is not None
                                and (not args.fixture or report["fixture"]["status"] == "agreement"))
@@ -276,6 +283,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(report, indent=2, sort_keys=True))
             else:
                 _show_report(report)
+                if args.profile:
+                    print(json.dumps(report["measurements"], sort_keys=True))
                 if args.witness and not witness_allowed:
                     print("No witness written: no verified candidate is available within the requested scope.")
                 elif args.witness:
