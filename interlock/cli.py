@@ -185,8 +185,28 @@ def main(argv: list[str] | None = None) -> int:
     minimize.add_argument("--json", action="store_true")
     minimize.add_argument("--report", help="Write a diagnostic report, not a publishable witness")
     minimize.add_argument("--force", action="store_true")
+    view = commands.add_parser("view-witness", help="Export a static four-version replay review as HTML to stdout")
+    view.add_argument("witness")
+    view_mode = view.add_mutually_exclusive_group(required=True)
+    view_mode.add_argument("--model-only", action="store_true")
+    view_mode.add_argument("--fixture", choices=sorted(FIXTURES))
+    view.add_argument("--max-frames", type=int, default=100)
     args = parser.parse_args(argv)
     try:
+        if args.command == "view-witness":
+            from .witness_view import render_witness
+            witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
+            result = replay_witness(witness)
+            if args.fixture:
+                provenance = validate_witness_fixture(witness, args.fixture)
+                result = replay_fixture(witness["scenario"], witness["events"], args.fixture)
+                result["source_verification"] = provenance
+                result["execution_scope"] = "bundled_handlers"
+            else:
+                result.update(execution_scope="model_only", source_verification="not_checked",
+                              scope="Declared model replay only; no source pin or executable handlers checked.")
+            print(render_witness(witness["scenario"]["name"], result, max_frames=args.max_frames))
+            return 4 if result.get("agreement") is False else 0
         if args.command == "minimize":
             from .reduction import reduce_witness
             _validate_outputs(args.witness, [args.report] if args.report else [], args.force)

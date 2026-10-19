@@ -41,6 +41,14 @@ class EndToEndTests(unittest.TestCase):
             replayed = self.cli("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
             self.assertTrue(replayed["interaction_reproduced"])
             original = witness.read_bytes()
+            view = self.cli("view-witness", witness, "--fixture", "multi-job-retry-conflict", "--max-frames", "2")
+            self.assertIn("Interlock witness review", view)
+            self.assertIn("Showing 2 of 8 recorded states", view)
+            self.assertIn("merged: FAIL", view)
+            self.assertIn("source identity: verified", view)
+            self.assertNotIn("<script", view)
+            self.assertEqual(witness.read_bytes(), original)
+
             reduced = self.cli("minimize", witness, "--model-only", "--json")
             self.assertTrue(reduced["one_event_deletion_minimal"])
             self.assertEqual(reduced["reduced_events"], json.loads(original)["events"])
@@ -54,6 +62,15 @@ class EndToEndTests(unittest.TestCase):
             imported["events"].append("acknowledge:a:1")
             padded = Path(directory) / "imported.json"
             padded.write_text(json.dumps(imported))
+            untrusted = json.loads(json.dumps(imported))
+            untrusted["scenario"]["name"] = "<script>untrusted label</script>"
+            untrusted["scenario_sha256"] = fingerprint(untrusted["scenario"])
+            view_input = Path(directory) / "view-input.json"
+            view_input.write_text(json.dumps(untrusted))
+            view = self.cli("view-witness", view_input, "--model-only")
+            self.assertIn("&lt;script&gt;untrusted label&lt;/script&gt;", view)
+            self.assertNotIn("<script", view)
+
             padded_bytes = padded.read_bytes()
             reduced = self.cli("minimize", padded, "--model-only", "--json")
             self.assertGreater(reduced["removed_events"], 0)
