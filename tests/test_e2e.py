@@ -29,6 +29,17 @@ class EndToEndTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             scenario, witness = Path(directory) / "scenario.json", Path(directory) / "witness.json"
             self.cli("example", "multi-job-retry-conflict", "--output", scenario)
+            safe_sweep = self.cli("sweep-depths", ROOT / "examples/retry_safe.json", "--depth", "0", "--depth", "12", "--model-only")
+            self.assertFalse(safe_sweep["any_failure"])
+            scenario_bytes = scenario.read_bytes()
+            sweep = self.cli("sweep-depths", scenario, "--depth", "0", "--depth", "12", "--model-only", expected=1)
+            self.assertEqual([r["depth"] for r in sweep["results"]], [0,12])
+            self.assertIsNone(sweep["results"][0]["candidate_events"])
+            self.assertTrue(sweep["results"][1]["candidate_events"])
+            self.assertEqual(sweep["execution_scope"], "model_only")
+            self.cli("sweep-depths", scenario, "--depth", "1", "--depth", "1", "--model-only", expected=2)
+            self.cli("sweep-depths", scenario, "--depth", "1", "--max-states", "200001", "--model-only", expected=2)
+            self.assertEqual(scenario.read_bytes(), scenario_bytes)
             profiling = ("--profile",) if sys.platform.startswith("linux") else ()
             checked = self.cli("check", scenario, "--fixture", "multi-job-retry-conflict",
                                "--witness", witness, *profiling, "--json", expected=1)

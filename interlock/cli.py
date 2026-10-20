@@ -175,6 +175,11 @@ def main(argv: list[str] | None = None) -> int:
                            help="Opt in to replaying this witness against trusted bundled handlers")
     replay_mode.add_argument("--model-only", action="store_true",
                              help="Replay only the embedded model, without checking pinned fixture sources")
+    sweep = commands.add_parser("sweep-depths", help="Compare bounded model searches at explicitly selected depths")
+    sweep.add_argument("scenario")
+    sweep.add_argument("--depth", type=int, action="append", required=True)
+    sweep.add_argument("--max-states", type=int, default=5000)
+    sweep.add_argument("--model-only", action="store_true", required=True)
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated model schedules without executing imported code")
     comparison.add_argument("left")
     comparison.add_argument("right")
@@ -197,6 +202,11 @@ def main(argv: list[str] | None = None) -> int:
     view.add_argument("--max-frames", type=int, default=100)
     args = parser.parse_args(argv)
     try:
+        if args.command == "sweep-depths":
+            from .depth_sweep import sweep_depths
+            result = sweep_depths(read_json(args.scenario), args.depth, args.max_states)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
         if args.command == "compare-witnesses":
             from .witness_comparison import compare_witnesses
             result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES))
