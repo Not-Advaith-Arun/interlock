@@ -191,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     reduction_mode.add_argument("--model-only", action="store_true",
                           help="Acknowledge that pinned sources and actual handlers will not be checked")
     minimize.add_argument("--max-attempts", type=int, default=500)
+    minimize.add_argument("--max-diagnostics", type=int, default=0, help="Retain the first 0..1000 removal decisions without changing reduction")
     minimize.add_argument("--json", action="store_true")
     minimize.add_argument("--report", help="Write a diagnostic report, not a publishable witness")
     minimize.add_argument("--force", action="store_true")
@@ -230,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             from .reduction import reduce_witness
             _validate_outputs(args.witness, [args.report] if args.report else [], args.force)
             witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
-            result = reduce_witness(witness, args.max_attempts, fixture=args.fixture)
+            result = reduce_witness(witness, args.max_attempts, fixture=args.fixture, max_diagnostics=args.max_diagnostics)
             if args.report:
                 _write(args.report, result, args.force)
             if args.json:
