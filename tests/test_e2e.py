@@ -19,6 +19,43 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout) if result.stdout.lstrip().startswith("{") else result.stdout
 
+    def test_compare_scenario_declarations_without_execution_or_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            left, right, other = [Path(directory) / name for name in ("left.json", "right.json", "other.json")]
+            self.cli("example", "retry-conflict", "--output", left)
+            self.cli("example", "retry-fixed", "--output", right)
+            self.cli("example", "cancellation-fixed", "--output", other)
+            original = {path: path.read_bytes() for path in (left, right, other)}
+            compared = self.cli("compare-scenarios", left, right)
+            self.assertFalse(compared["declarations_identical"])
+            self.assertFalse(compared["versions"]["base"]["changed"])
+            self.assertFalse(compared["versions"]["left"]["changed"])
+            expected = [{"field": "deduplicate", "before": False, "after": True,
+                         "before_present": True, "after_present": True}]
+            for version in ("right", "merged"):
+                self.assertEqual(compared["versions"][version]["changes"], expected)
+            reverse = self.cli("compare-scenarios", right, left)
+            self.assertTrue(reverse["versions"]["merged"]["changes"][0]["before"])
+            self.assertFalse(reverse["versions"]["merged"]["changes"][0]["after"])
+            same = self.cli("compare-scenarios", left, left)
+            self.assertTrue(same["declarations_identical"])
+            self.assertFalse(any(row["changed"] for row in same["versions"].values()))
+            renamed = json.loads(original[right]); renamed["name"] = "renamed control"
+            right.write_text(json.dumps(renamed))
+            original_fixed = Path(directory) / "original-fixed.json"
+            original_fixed.write_bytes(original[right])
+            name_only = self.cli("compare-scenarios", original_fixed, right)
+            self.assertFalse(name_only["declarations_identical"])
+            self.assertNotEqual(name_only["left"]["sha256"], name_only["right"]["sha256"])
+            self.assertFalse(any(row["changed"] for row in name_only["versions"].values()))
+            right.write_bytes(original[right])
+            self.cli("compare-scenarios", left, other, expected=2)
+            invalid = json.loads(original[right]); invalid["versions"]["merged"]["deduplicate"] = "yes"
+            right.write_text(json.dumps(invalid))
+            self.cli("compare-scenarios", left, right, expected=2)
+            right.write_bytes(original[right])
+            self.assertEqual({path: path.read_bytes() for path in original}, original)
+
     def test_bundled_handler_corpus_and_historical_calibration(self):
         report = self.cli("suite", "--json")
         self.assertEqual(report["status"], "passed")

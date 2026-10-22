@@ -198,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
     sweep_mode.add_argument("--model-only", action="store_true")
     sweep_mode.add_argument("--fixture", choices=sorted(FIXTURES), help="Explicit trusted bundled handlers, checked at each bound")
     sweep.add_argument("--max-schedules", type=int, help="Per-depth handler prefix budget; requires --fixture")
+    scenarios = commands.add_parser("compare-scenarios", help="Compare declared configuration changes without executing or assessing safety")
+    scenarios.add_argument("left")
+    scenarios.add_argument("right")
     comparison = commands.add_parser("compare-witnesses", help="Compare two validated schedules with explicit model or trusted bundled-handler scope")
     comparison.add_argument("left")
     comparison.add_argument("right")
@@ -230,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
                                   fixture=args.fixture, max_schedules=args.max_schedules)
             print(json.dumps(result, indent=2, sort_keys=True))
             return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
+        if args.command == "compare-scenarios":
+            from .scenario_comparison import compare_scenarios
+            print(json.dumps(compare_scenarios(read_json(args.left), read_json(args.right)), indent=2, sort_keys=True))
+            return 0
         if args.command == "compare-witnesses":
             from .witness_comparison import compare_witnesses
             result = compare_witnesses(read_json(args.left, max_bytes=MAX_WITNESS_BYTES), read_json(args.right, max_bytes=MAX_WITNESS_BYTES), fixture=args.fixture)
