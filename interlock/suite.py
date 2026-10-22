@@ -21,6 +21,18 @@ EXPECTED_WITNESSES = {
 EXIT_CODES = {'passed': 0, 'failed': 1, 'incomplete': 3, 'fixture_mismatch': 4}
 
 
+def suite_summary(report):
+    return {"format": "interlock-suite-summary-v1", "status": report["status"],
+            "bounds": report["bounds"], "summary": report["summary"],
+            "cases": [{"fixture": case["fixture"], "verdict": case["verdict"], "reason": case["reason"],
+                       "expected_status": case["expected_status"], "observed_status": case["report"]["status"],
+                       "model_coverage": case["report"]["coverage"],
+                       "handler_coverage": case["report"]["fixture"].get("coverage"),
+                       "handler_status": case["report"]["fixture"]["status"]}
+                      for case in report["cases"]],
+            "scope": report["scope"] + " Full requested suite executed; detailed traces/states and direct replay diagnostics omitted from summary. Use --report to retain complete evidence. Summary size does not bound execution cost."}
+
+
 def _verdict(report, expected_status, expected_events):
     if report['status'] == 'fixture_mismatch':
         return 'fixture_mismatch', 'Model and handlers disagree.'

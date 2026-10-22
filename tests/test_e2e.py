@@ -428,6 +428,28 @@ class EndToEndTests(unittest.TestCase):
         self.cli("sweep-depths", scenario, "--fixture", fixture, "--depth", "0", "--max-schedules", "0", expected=2)
         self.assertEqual(scenario.read_bytes(), original)
 
+    def test_suite_summary_keeps_verdict_and_coverage_with_full_report_retention(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "full.json"
+            args = ("suite", "--fixture", "retry-conflict", "--fixture", "retry-fixed")
+            summary = self.cli(*args, "--summary", "--report", report)
+            full = json.loads(report.read_text())
+            self.assertEqual(summary["status"], full["status"])
+            self.assertEqual(summary["summary"], full["summary"])
+            self.assertEqual(summary["bounds"], full["bounds"])
+            for brief, case in zip(summary["cases"], full["cases"]):
+                self.assertEqual(brief["fixture"], case["fixture"])
+                self.assertEqual(brief["verdict"], case["verdict"])
+                self.assertEqual(brief["model_coverage"], case["report"]["coverage"])
+                self.assertEqual(brief["handler_coverage"], case["report"]["fixture"]["coverage"])
+                self.assertNotIn("report", brief)
+            saved = report.read_bytes()
+            incomplete = self.cli(*args, "--summary", "--max-states", "1", expected=3)
+            self.assertEqual(incomplete["status"], "incomplete")
+            self.assertTrue(all(row["handler_coverage"] is None for row in incomplete["cases"]))
+            self.assertTrue(all(row["handler_status"] == "not_run" for row in incomplete["cases"]))
+            self.assertEqual(report.read_bytes(), saved)
+
     def test_actual_report_sync_and_replace_failures_preserve_prior_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

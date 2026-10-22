@@ -177,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     suite.add_argument("--max-states", type=int, default=50_000)
     suite.add_argument("--max-schedules", type=int, default=MAX_FIXTURE_SCHEDULES)
     suite.add_argument("--json", action="store_true")
+    suite.add_argument("--summary", action="store_true", help="Emit compact JSON verdicts/coverage after full execution; --report still saves complete diagnostics")
     suite.add_argument("--report", help="Also write the full suite report to this file")
     suite.add_argument("--force", action="store_true", help="Allow replacement of an existing report")
     reproduce = commands.add_parser("replay", help="Replay a self-contained witness")
@@ -316,7 +317,10 @@ def main(argv: list[str] | None = None) -> int:
                                max_states=args.max_states, max_schedules=args.max_schedules)
             if args.report:
                 _write(args.report, result, args.force)
-            if args.json:
+            if args.summary:
+                from .suite import suite_summary
+                print(json.dumps(suite_summary(result), indent=2, sort_keys=True))
+            elif args.json:
                 print(json.dumps(result, indent=2, sort_keys=True))
             else:
                 print(f"Bundled regression suite: {result['status']}")
