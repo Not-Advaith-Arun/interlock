@@ -1,6 +1,7 @@
 """CLI journeys through exploration, real handlers, exported witnesses and replay."""
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -357,6 +358,44 @@ class EndToEndTests(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertTrue(fifo.exists())
             self.assertEqual(pinned.read_bytes(), original)
+
+    def test_installed_bundled_source_drift_refuses_pinned_replay_without_rewriting_witness(self):
+        # A disposable installation exercises actual installed-byte drift;
+        # changing only supplied witness metadata cannot cover this trust check.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            witness, output = root / "pinned.json", root / "review.html"
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", "multi-job-retry-conflict",
+                     "--witness", witness, "--json", expected=1)
+            original = witness.read_bytes()
+            installed = root / "interlock"
+            shutil.copytree(ROOT / "interlock", installed, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            def copied(*args, expected):
+                result = subprocess.run([sys.executable, "-m", "interlock", *map(str, args)], cwd=root,
+                    env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                return result
+            baseline = copied("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
+            self.assertEqual(json.loads(baseline.stdout)["source_verification"], "verified")
+            changed = installed / "multijob_retry_fixture.py"
+            original_source = changed.read_bytes()
+            self.assertEqual(original_source, (ROOT / "interlock/multijob_retry_fixture.py").read_bytes())
+            changed.write_bytes(original_source + b"\n# Disposable installed-source drift acceptance fixture.\n")
+            for args in (("replay", witness, "--fixture", "multi-job-retry-conflict", "--json"),
+                         ("view-witness", witness, "--fixture", "multi-job-retry-conflict", "--output", output),
+                         ("minimize", witness, "--fixture", "multi-job-retry-conflict", "--json")):
+                refused = copied(*args, expected=2)
+                self.assertIn("fixture source identity does not match witness", refused.stderr)
+                self.assertEqual(refused.stdout, "")
+                self.assertFalse(output.exists())
+            modeled = copied("replay", witness, "--model-only", "--json", expected=1)
+            self.assertEqual(json.loads(modeled.stdout)["source_verification"], "not_checked")
+            self.assertIn("source identity: not_checked", copied("view-witness", witness, "--model-only", expected=0).stdout)
+            changed.write_bytes(original_source)
+            restored = copied("replay", witness, "--fixture", "multi-job-retry-conflict", "--json", expected=1)
+            self.assertEqual(json.loads(restored.stdout)["source_verification"], "verified")
+            self.assertEqual(witness.read_bytes(), original)
+            self.assertEqual((ROOT / "interlock/multijob_retry_fixture.py").read_bytes(), original_source)
 
     def test_rehashed_witness_with_false_source_binding_cannot_claim_handler_verification(self):
         with tempfile.TemporaryDirectory() as directory:
