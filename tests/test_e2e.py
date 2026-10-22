@@ -19,6 +19,36 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout) if result.stdout.lstrip().startswith("{") else result.stdout
 
+    def test_html_review_file_publication_preserves_existing_and_input_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            witness, output = root / "witness.json", root / "review.html"
+            self.cli("check", ROOT / "examples/multi_job_retry_conflict.json", "--fixture", "multi-job-retry-conflict",
+                     "--witness", witness, "--json", expected=1)
+            original = witness.read_bytes()
+            args = ("view-witness", witness, "--fixture", "multi-job-retry-conflict", "--max-frames", "2")
+            rendered = self.cli(*args)
+            self.cli(*args, "--output", output)
+            self.assertEqual(output.read_text(), rendered)
+            prior = output.read_bytes()
+            self.cli(*args, "--output", output, expected=2)
+            self.cli(*args, "--output", witness, "--force", expected=2)
+            alias, link = root / "alias.json", root / "link.html"
+            os.link(witness, alias)
+            link.symlink_to(output)
+            self.cli(*args, "--output", alias, "--force", expected=2)
+            self.cli(*args, "--output", link, "--force", expected=2)
+            self.cli(*args, "--output", output, "--force")
+            self.assertEqual(output.read_bytes(), prior)
+            forged = json.loads(original)
+            forged["fixture"]["source_identity"]["false"] = "untrusted"
+            forged["witness_sha256"] = fingerprint({k:v for k,v in forged.items() if k != "witness_sha256"})
+            invalid = root / "invalid.json"; invalid.write_text(json.dumps(forged))
+            self.cli("view-witness", invalid, "--fixture", "multi-job-retry-conflict", "--output", output, "--force", expected=2)
+            self.assertEqual(output.read_bytes(), prior)
+            self.assertEqual(witness.read_bytes(), original)
+            self.assertEqual(alias.read_bytes(), original)
+
     def test_compare_scenario_declarations_without_execution_or_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
             left, right, other = [Path(directory) / name for name in ("left.json", "right.json", "other.json")]

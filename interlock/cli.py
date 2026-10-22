@@ -21,6 +21,10 @@ def _write(path: str, value: dict, force: bool = False, *, compact: bool = False
     payload = (canonical(value) if compact else json.dumps(value, indent=2, sort_keys=True)) + "\n"
     if max_bytes is not None and len(payload.encode("utf-8")) > max_bytes:
         raise ValueError(f"output exceeds {max_bytes / 1_000_000:g} MB limit")
+    _write_payload(path, payload, force)
+
+
+def _write_payload(path: str, payload: str, force: bool = False) -> None:
     destination = Path(path)
     if destination.is_symlink():
         raise ValueError(f"refusing symlink output: {destination}")
@@ -225,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
     view_mode.add_argument("--model-only", action="store_true")
     view_mode.add_argument("--fixture", choices=sorted(FIXTURES))
     view.add_argument("--max-frames", type=int, default=100)
+    view.add_argument("--output", help="Atomically save HTML to a distinct local file instead of stdout")
+    view.add_argument("--force", action="store_true", help="Allow replacement of an existing HTML file")
     args = parser.parse_args(argv)
     try:
         if args.command == "sweep-depths":
@@ -244,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "view-witness":
             from .witness_view import render_witness
+            _validate_outputs(args.witness, [args.output] if args.output else [], args.force)
             witness = read_json(args.witness, max_bytes=MAX_WITNESS_BYTES)
             result = replay_witness(witness)
             if args.fixture:
@@ -254,7 +261,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 result.update(execution_scope="model_only", source_verification="not_checked",
                               scope="Declared model replay only; no source pin or executable handlers checked.")
-            print(render_witness(witness["scenario"]["name"], result, max_frames=args.max_frames))
+            html = render_witness(witness["scenario"]["name"], result, max_frames=args.max_frames)
+            if args.output:
+                _write_payload(args.output, html + "\n", args.force)
+                print(f"Wrote HTML review to {args.output}")
+            else:
+                print(html)
             return 4 if result.get("agreement") is False else 0
         if args.command == "minimize":
             from .reduction import reduce_witness
