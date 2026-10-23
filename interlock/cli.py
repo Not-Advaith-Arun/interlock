@@ -155,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
                "3 incomplete exploration; 4 model/handler mismatch.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
+    from .showcase import arguments as showcase_arguments
+    showcase_arguments(commands.add_parser("showcase", help="generate an interactive offline product sample"))
     historical = commands.add_parser("historical-waitfor", help="Calibrate a pinned CPython before/fix pair separately from merge checking")
     historical.add_argument("--model-only", action="store_true", help="Run only the finite decision model; do not execute selected historical functions")
     historical.add_argument("--json", action="store_true")
@@ -270,6 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     view.add_argument("--output", help="Atomically save HTML to a distinct local file instead of stdout")
     view.add_argument("--force", action="store_true", help="Allow replacement of an existing HTML file")
     args = parser.parse_args(argv)
+    if args.command == "showcase":
+        from .showcase import generate
+        return generate(args)
     try:
         if args.command == "replay":
             if args.trace_limit is not None:

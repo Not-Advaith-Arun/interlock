@@ -17,3 +17,5 @@ include = ["interlock*"]
 
 [tool.setuptools.package-data]
 "interlock.fixtures.historical_waitfor" = ["LICENSE", "manifest.json"]
+
+interlock = ["ui/*.html", "ui/*.css", "ui/*.js"]
