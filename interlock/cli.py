@@ -184,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     case_compare = commands.add_parser("compare-case-results", help="Compare recorded model case classifications without replay, execution or safety judgment")
     case_compare.add_argument("before")
     case_compare.add_argument("after")
+    case_compare.add_argument("--html", action="store_true", help="Offline recorded metadata comparison; no replay or safety claim")
     cases = commands.add_parser("check-cases", help="Run a caller-authored bounded model regression manifest with expected classifications")
     cases.add_argument("manifest",help="Local manifest file or - for bounded JSON stdin")
     cases.add_argument("--case", action="append", help="Run only these existing case IDs; full manifest still validates")
@@ -404,7 +405,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "compare-case-results":
             from .case_comparison import compare_case_results
-            print(json.dumps(compare_case_results(read_json(args.before),read_json(args.after)),indent=2,sort_keys=True))
+            result = compare_case_results(read_json(args.before),read_json(args.after))
+            if args.html:
+                from .case_comparison_view import render_case_comparison
+                print(render_case_comparison(result))
+            else:
+                print(json.dumps(result,indent=2,sort_keys=True))
             return 0
         if args.command == "check-cases":
             from .model_cases import check_cases, cases_summary
