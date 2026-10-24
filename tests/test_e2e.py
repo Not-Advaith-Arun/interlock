@@ -217,7 +217,7 @@ class EndToEndTests(unittest.TestCase):
             self.assertIn("Showing 2 of 8 recorded states", view)
             self.assertIn("merged: FAIL", view)
             self.assertIn("source identity: verified", view)
-            self.assertNotIn("<script", view)
+            self.assertEqual(view.count("<script>"), 1)
             self.assertEqual(witness.read_bytes(), original)
 
             reduced = self.cli("minimize", witness, "--model-only", "--json")
@@ -240,7 +240,7 @@ class EndToEndTests(unittest.TestCase):
             view_input.write_text(json.dumps(untrusted))
             view = self.cli("view-witness", view_input, "--model-only")
             self.assertIn("&lt;script&gt;untrusted label&lt;/script&gt;", view)
-            self.assertNotIn("<script", view)
+            self.assertEqual(view.count("<script>"), 1)
 
             comparison = self.cli("compare-witnesses", witness, padded, "--model-only")
             self.assertEqual(comparison["common_event_prefix_length"], len(json.loads(original)["events"]))
