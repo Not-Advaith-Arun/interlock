@@ -197,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     cases.add_argument("--force", action="store_true")
     batch = commands.add_parser("check-many", help="Check1..8 explicit scenario files in model-only scope with separate coverage and bounded total requested states")
     batch.add_argument("scenarios", nargs="+")
+    batch.add_argument("--html",action="store_true",help="Model-only classification/bounds/coverage cards; full evidence stays in JSON/--report")
     batch.add_argument("--max-depth", type=int, default=8)
     batch.add_argument("--max-states", type=int, default=25000, help="Per-scenario ceiling; selected count times ceiling must be<=200000")
     batch.add_argument("--report", help="Atomically save full per-scenario model reports")
@@ -233,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     prefix_mode.add_argument("--fixture", choices=sorted(FIXTURES))
     sweep = commands.add_parser("sweep-depths", help="Compare bounded model/optional bundled-handler checks at selected depths")
     sweep.add_argument("scenario")
+    sweep.add_argument("--html",action="store_true",help="Metadata-only bounded search cards; requires --model-only")
     sweep.add_argument("--depth", type=int, action="append", required=True)
     sweep.add_argument("--max-states", type=int, default=5000)
     sweep.add_argument("--profile", action="store_true", help="Measure each search on Linux; RSS is the process-lifetime high-water mark")
@@ -301,10 +303,16 @@ def main(argv: list[str] | None = None) -> int:
             outcomes = replayed["observed_outcomes"] if args.fixture else replayed["outcomes"]
             return int(any(not row["passed"] for row in outcomes.values()))
         if args.command == "sweep-depths":
+            if args.html and not args.model_only:
+                raise ValueError("HTML depth review requires --model-only; use JSON for explicit handler execution")
             from .depth_sweep import sweep_depths
             result = sweep_depths(read_json(args.scenario), args.depth, args.max_states, profile=args.profile,
                                   fixture=args.fixture, max_schedules=args.max_schedules)
-            print(json.dumps(result, indent=2, sort_keys=True))
+            if args.html:
+                from .bounded_search_view import render_search
+                print(render_search(result,"depth_sweep"))
+            else:
+                print(json.dumps(result, indent=2, sort_keys=True))
             return 3 if result["any_incomplete"] else 1 if result["any_failure"] else 0
         if args.command == "compare-scenarios":
             from .scenario_comparison import compare_scenarios
@@ -458,7 +466,11 @@ def main(argv: list[str] | None = None) -> int:
             result = check_many(scenarios, max_depth=args.max_depth, max_states=args.max_states)
             if args.report:
                 _write(args.report, result, args.force)
-            print(json.dumps(result, indent=2, sort_keys=True))
+            if args.html:
+                from .bounded_search_view import render_search
+                print(render_search(result,"batch"))
+            else:
+                print(json.dumps(result, indent=2, sort_keys=True))
             return 3 if result["any_incomplete"] else int(result["any_failure"])
         if args.command == "suite":
             _validate_outputs(None, [args.report] if args.report else [], args.force)
