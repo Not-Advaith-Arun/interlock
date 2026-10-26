@@ -95,3 +95,22 @@ def render_manifest_comparison(report):
     from .report_cards import render_report
     rows=[{'group':row['presence'],'cells':[row['id'],row['left']['expected_status']if row['left']else'Absent',row['right']['expected_status']if row['right']else'Absent',row['expectation_changed'],row['scenario_changed']]}for row in report['cases']]
     return render_report('Interlock regression declaration comparison',report['scope'],['Case ID','Left expectation','Right expectation','Expectation differs','Scenario identity differs'],rows,payload=report,summary='Declared expectations, scenario identities and case presence compared without execution. Changing an expected classification is not evidence of a passing or safer implementation.')
+
+
+def select_cases(manifest, selected_ids):
+    """Narrow explicit declarations without execution or inferred expectations."""
+    if selected_ids is None:
+        raise ValueError('select explicit existing case IDs')
+    from copy import deepcopy
+    return {'format':manifest.get('format') if isinstance(manifest,dict) else None,
+            'cases':deepcopy(validated_cases(manifest,selected_ids))}
+
+
+def render_case_selection(manifest, original_count):
+    from .scenario import fingerprint
+    from .report_cards import render_report
+    rows=[{'group':case['expected_status'],'cells':[case['id'],case['scenario']['model'],case['expected_status'],fingerprint(case['scenario'])]}for case in manifest['cases']]
+    return render_report('Interlock selected regression declarations',
+        'All input declarations validated, including omitted cases. Selected cases keep their original order, complete scenario definitions and caller-declared expectations. Full private selected configuration is embedded in this page and native JSON download. Run check-cases separately with explicit bounds. No search, source-pin check, handlers, observed outcomes or safety conclusion. Omitted declarations are not included or assessed by a later selected run.',
+        ['Case ID','Declared model','Declared expectation','Scenario identity'],rows,payload=manifest,
+        summary=f"Selected {len(rows)} of {original_count} declarations; {original_count-len(rows)} omitted. Download report JSON is a runnable manifest, not a passing-run report. Incomplete searches never pass.")

@@ -191,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     manifest_comparison.add_argument("left",type=Path)
     manifest_comparison.add_argument("right",type=Path)
     manifest_comparison.add_argument("--html",action="store_true")
+    case_selection=commands.add_parser("select-cases",help="Export explicitly selected regression declarations in original order without execution")
+    case_selection.add_argument("input",type=Path)
+    case_selection.add_argument("--case",action="append",required=True)
+    case_selection.add_argument("--html",action="store_true",help="Contains full private selected scenarios and native manifest download")
     case_inspection=commands.add_parser("inspect-cases",help="Validate a complete case manifest without running search or handlers")
     case_inspection.add_argument("input",type=Path)
     case_inspection.add_argument("--case",action="append")
@@ -477,6 +481,12 @@ def main(argv: list[str] | None = None) -> int:
             from .model_cases import compare_case_manifests,render_manifest_comparison
             report=compare_case_manifests(read_json(args.left),read_json(args.right))
             print(render_manifest_comparison(report)if args.html else json.dumps(report,indent=2))
+            return 0
+        if args.command == "select-cases":
+            from .model_cases import select_cases,render_case_selection
+            manifest=read_json(args.input)
+            selected=select_cases(manifest,args.case)
+            print(render_case_selection(selected,len(manifest['cases']))if args.html else json.dumps(selected,indent=2))
             return 0
         if args.command == "inspect-cases":
             from .model_cases import inspect_cases, render_case_inspection
