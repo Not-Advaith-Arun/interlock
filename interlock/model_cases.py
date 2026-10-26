@@ -5,7 +5,7 @@ from .model_batch import check_many
 EXPECTED = {"merge_interaction_found", "no_interaction_within_bound", "baseline_failure", "branch_failure"}
 
 
-def check_cases(manifest, *, max_depth=8, max_states=25000, selected_ids=None):
+def validated_cases(manifest, selected_ids=None):
     if not isinstance(manifest, dict) or set(manifest) != {"format", "cases"} or manifest["format"] != "interlock-model-cases-v1":
         raise ValueError("expected interlock-model-cases-v1 with cases")
     cases = manifest["cases"]
@@ -25,14 +25,18 @@ def check_cases(manifest, *, max_depth=8, max_states=25000, selected_ids=None):
                 or any(not isinstance(key,str) or key not in identities for key in selected_ids)
                 or len(set(selected_ids)) != len(selected_ids)):
             raise ValueError("select1..8 distinct existing model case IDs")
-        # Validate even omitted declarations before any selected search begins.
-        from .scenario import fingerprint, validate_scenario
-        for case in cases:
-            validate_scenario(case["scenario"])
-        hashes = [fingerprint(case["scenario"]) for case in cases]
-        if len(set(hashes)) != len(hashes):
-            raise ValueError("selected scenarios must have distinct canonical identities")
-        cases = [case for case in cases if case["id"] in selected_ids]
+    # Validate every declaration, including omitted cases, without running search.
+    from .scenario import fingerprint, validate_scenario
+    for case in cases:
+        validate_scenario(case["scenario"])
+    hashes = [fingerprint(case["scenario"]) for case in cases]
+    if len(set(hashes)) != len(hashes):
+        raise ValueError("selected scenarios must have distinct canonical identities")
+    return [case for case in cases if selected_ids is None or case["id"] in selected_ids]
+
+
+def check_cases(manifest, *, max_depth=8, max_states=25000, selected_ids=None):
+    cases=validated_cases(manifest,selected_ids)
     checked = check_many([case["scenario"] for case in cases], max_depth=max_depth, max_states=max_states)
     rows = []
     for case, result in zip(cases, checked["cases"]):
@@ -56,3 +60,19 @@ def cases_summary(report):
                       "expected_status":row["expected_status"],"observed_status":row["report"]["status"],
                       "verdict":row["verdict"]} for row in report["cases"]],
             "scope":"Summary of this model-only run, not independently verified input. Full search reports, schedules and state details omitted; use --report for complete evidence. Expected failures matching classifications are not safety success. Omitted cases unassessed and incomplete searches never pass."}
+
+
+def inspect_cases(manifest, *, selected_ids=None):
+    from .scenario import fingerprint
+    cases=validated_cases(manifest,selected_ids)
+    return {'format':'interlock-model-cases-inspection-v1','manifest_cases':len(manifest['cases']),
+            'omitted_cases':len(manifest['cases'])-len(cases),
+            'cases':[{'id':case['id'],'model':case['scenario']['model'],
+                      'scenario_sha256':fingerprint(case['scenario']),'expected_status':case['expected_status']}for case in cases],
+            'scope':'Structural validation of every supplied case, including omitted declarations, only. Expected classifications are caller declarations, not observed outcomes. No search, source-pin verification, handlers or imported code executed. Private scenario names/configuration are omitted; metadata is not a runnable manifest, source authenticity or safety proof.'}
+
+
+def render_case_inspection(report):
+    from .report_cards import render_report
+    rows=[{'group':c['expected_status'],'cells':[c['id'],c['model'],c['expected_status'],c['scenario_sha256']]}for c in report['cases']]
+    return render_report('Interlock regression manifest inspection',report['scope'],['Case ID','Model','Declared expectation','Scenario identity'],rows,payload=report,summary=f"Inspected {len(rows)} of {report['manifest_cases']} declarations; {report['omitted_cases']} omitted from display. All declarations validated; no search or handler execution, no passing-run evidence.")

@@ -187,6 +187,10 @@ def main(argv: list[str] | None = None) -> int:
     case_compare.add_argument("after")
     case_compare.add_argument("--html", action="store_true", help="Offline recorded metadata comparison; no replay or safety claim")
     from .case_template import REFERENCE_EXPECTATIONS
+    case_inspection=commands.add_parser("inspect-cases",help="Validate a complete case manifest without running search or handlers")
+    case_inspection.add_argument("input",type=Path)
+    case_inspection.add_argument("--case",action="append")
+    case_inspection.add_argument("--html",action="store_true")
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
@@ -464,6 +468,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(render_case_comparison(result))
             else:
                 print(json.dumps(result,indent=2,sort_keys=True))
+            return 0
+        if args.command == "inspect-cases":
+            from .model_cases import inspect_cases, render_case_inspection
+            report=inspect_cases(read_json(args.input),selected_ids=args.case)
+            print(render_case_inspection(report) if args.html else json.dumps(report,indent=2))
             return 0
         if args.command == "case-template":
             from .case_template import case_template, render_case_template
