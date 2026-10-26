@@ -186,6 +186,10 @@ def main(argv: list[str] | None = None) -> int:
     case_compare.add_argument("before")
     case_compare.add_argument("after")
     case_compare.add_argument("--html", action="store_true", help="Offline recorded metadata comparison; no replay or safety claim")
+    from .case_template import REFERENCE_EXPECTATIONS
+    case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
+    case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
+    case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
     cases = commands.add_parser("check-cases", help="Run a caller-authored bounded model regression manifest with expected classifications")
     cases.add_argument("manifest",help="Local manifest file or - for bounded JSON stdin")
     cases.add_argument("--case", action="append", help="Run only these existing case IDs; full manifest still validates")
@@ -458,6 +462,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.html:
                 from .case_comparison_view import render_case_comparison
                 print(render_case_comparison(result))
+            else:
+                print(json.dumps(result,indent=2,sort_keys=True))
+            return 0
+        if args.command == "case-template":
+            from .case_template import case_template, render_case_template
+            result=case_template(args.fixture)
+            if args.html:
+                print(render_case_template(result))
             else:
                 print(json.dumps(result,indent=2,sort_keys=True))
             return 0
