@@ -185,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     case_compare = commands.add_parser("compare-case-results", help="Compare recorded model case classifications without replay, execution or safety judgment")
     case_compare.add_argument("before")
     case_compare.add_argument("after")
+    case_compare.add_argument("--include-coverage",action="store_true",help="Also compare recorded requested model bounds and coverage counters; no rerun/authentication")
     case_compare.add_argument("--html", action="store_true", help="Offline recorded metadata comparison; no replay or safety claim")
     from .case_template import REFERENCE_EXPECTATIONS
     manifest_comparison=commands.add_parser("compare-case-manifests",help="Compare declared expectations/scenario identities without search or handler execution")
@@ -470,7 +471,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "compare-case-results":
             from .case_comparison import compare_case_results
-            result = compare_case_results(read_json(args.before),read_json(args.after))
+            result = compare_case_results(read_json(args.before),read_json(args.after),include_coverage=args.include_coverage)
             if args.html:
                 from .case_comparison_view import render_case_comparison
                 print(render_case_comparison(result))
