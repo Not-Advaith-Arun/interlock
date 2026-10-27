@@ -188,6 +188,10 @@ def main(argv: list[str] | None = None) -> int:
     case_compare.add_argument("--include-coverage",action="store_true",help="Also compare recorded requested model bounds and coverage counters; no rerun/authentication")
     case_compare.add_argument("--html", action="store_true", help="Offline recorded metadata comparison; no replay or safety claim")
     from .case_template import REFERENCE_EXPECTATIONS
+    manifest_combine=commands.add_parser("combine-case-manifests",help="Combine explicit regression declarations without overwriting conflicting IDs or running tests")
+    manifest_combine.add_argument("left",type=Path)
+    manifest_combine.add_argument("right",type=Path)
+    manifest_combine.add_argument("--html",action="store_true")
     manifest_comparison=commands.add_parser("compare-case-manifests",help="Compare declared expectations/scenario identities without search or handler execution")
     manifest_comparison.add_argument("left",type=Path)
     manifest_comparison.add_argument("right",type=Path)
@@ -477,6 +481,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(render_case_comparison(result))
             else:
                 print(json.dumps(result,indent=2,sort_keys=True))
+            return 0
+        if args.command == "combine-case-manifests":
+            from .model_cases import combine_case_manifests,render_case_combination
+            left=read_json(args.left);right=read_json(args.right)
+            result=combine_case_manifests(left,right)
+            print(render_case_combination(result,len(left['cases'])+len(right['cases']))if args.html else json.dumps(result,indent=2))
             return 0
         if args.command == "compare-case-manifests":
             from .model_cases import compare_case_manifests,render_manifest_comparison

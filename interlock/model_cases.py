@@ -114,3 +114,26 @@ def render_case_selection(manifest, original_count):
         'All input declarations validated, including omitted cases. Selected cases keep their original order, complete scenario definitions and caller-declared expectations. Full private selected configuration is embedded in this page and native JSON download. Run check-cases separately with explicit bounds. No search, source-pin check, handlers, observed outcomes or safety conclusion. Omitted declarations are not included or assessed by a later selected run.',
         ['Case ID','Declared model','Declared expectation','Scenario identity'],rows,payload=manifest,
         summary=f"Selected {len(rows)} of {original_count} declarations; {original_count-len(rows)} omitted. Download report JSON is a runnable manifest, not a passing-run report. Incomplete searches never pass.")
+
+
+def combine_case_manifests(left,right):
+    """Combine explicit declarations, never resolve changed expectations by guessing."""
+    from copy import deepcopy
+    a=validated_cases(left);b=validated_cases(right);combined={case['id']:case for case in a}
+    for case in b:
+        if case['id']in combined and combined[case['id']]!=case:
+            raise ValueError('same case ID has conflicting scenario or expectation; review both declarations explicitly')
+        combined.setdefault(case['id'],case)
+    result={'format':'interlock-model-cases-v1','cases':deepcopy(list(combined.values()))}
+    validated_cases(result)  # Combined cap and canonical scenario uniqueness still apply.
+    return result
+
+
+def render_case_combination(manifest,input_count):
+    from .scenario import fingerprint
+    from .report_cards import render_report
+    rows=[{'group':case['expected_status'],'cells':[case['id'],case['scenario']['model'],case['expected_status'],fingerprint(case['scenario'])]}for case in manifest['cases']]
+    return render_report('Interlock combined regression declarations',
+        'Both complete manifests structurally validated. Identical same-ID declarations coalesced; conflicting same-ID expectations/scenarios refused instead of overwritten. Original left order then new right IDs retained, with at most8 distinct canonical scenarios. Full private declared configurations are embedded in this page and native download. No search, handlers, source verification or observed outcome; combining expected labels is not passing-run evidence or safety approval. Run check-cases separately with explicit bounds.',
+        ['Case ID','Declared model','Declared expectation','Scenario identity'],rows,payload=manifest,
+        summary=f"Combined {input_count} supplied declarations into {len(rows)} cases; {input_count-len(rows)} identical same-ID declarations coalesced. Native manifest download is runnable, not a test result. Incomplete searches never pass.")
