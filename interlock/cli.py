@@ -182,6 +182,11 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--force", action="store_true", help="Allow replacement of existing output files")
     check.add_argument("--fixture", choices=sorted(FIXTURES),
                        help="Opt in to checking trusted bundled handlers against every bounded legal schedule prefix")
+    binding=commands.add_parser("inspect-case-binding",help="Compare retained recorded case identities/expectations against explicit declarations; no execution or authentication")
+    binding.add_argument("manifest",type=Path)
+    binding.add_argument("report",type=Path)
+    binding.add_argument("--case",action="append")
+    binding.add_argument("--html",action="store_true")
     case_compare = commands.add_parser("compare-case-results", help="Compare recorded model case classifications without replay, execution or safety judgment")
     case_compare.add_argument("before")
     case_compare.add_argument("after")
@@ -473,6 +478,11 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(json.dumps(scenario, indent=2, sort_keys=True))
             return 0
+        if args.command == "inspect-case-binding":
+            from .case_binding import inspect_case_binding,render_case_binding
+            result=inspect_case_binding(read_json(args.manifest),read_json(args.report),args.case)
+            print(render_case_binding(result)if args.html else json.dumps(result,indent=2))
+            return 0 if result['matches_declarations']else 1
         if args.command == "compare-case-results":
             from .case_comparison import compare_case_results
             result = compare_case_results(read_json(args.before),read_json(args.after),include_coverage=args.include_coverage)
