@@ -201,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     manifest_comparison.add_argument("left",type=Path)
     manifest_comparison.add_argument("right",type=Path)
     manifest_comparison.add_argument("--html",action="store_true")
+    case_picker=commands.add_parser("case-picker",help="Create an explicitly private offline case picker with full caller scenarios and native chosen-manifest export; no execution")
+    case_picker.add_argument("input",type=Path)
     case_selection=commands.add_parser("select-cases",help="Export explicitly selected regression declarations in original order without execution")
     case_selection.add_argument("input",type=Path)
     case_selection.add_argument("--case",action="append",required=True)
@@ -502,6 +504,11 @@ def main(argv: list[str] | None = None) -> int:
             from .model_cases import compare_case_manifests,render_manifest_comparison
             report=compare_case_manifests(read_json(args.left),read_json(args.right))
             print(render_manifest_comparison(report)if args.html else json.dumps(report,indent=2))
+            return 0
+        if args.command == "case-picker":
+            from .model_cases import validated_cases,render_case_selection
+            manifest=read_json(args.input);validated_cases(manifest)
+            print(render_case_selection(manifest,len(manifest['cases']),interactive=True))
             return 0
         if args.command == "select-cases":
             from .model_cases import select_cases,render_case_selection

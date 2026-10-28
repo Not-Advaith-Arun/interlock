@@ -106,14 +106,14 @@ def select_cases(manifest, selected_ids):
             'cases':deepcopy(validated_cases(manifest,selected_ids))}
 
 
-def render_case_selection(manifest, original_count):
+def render_case_selection(manifest, original_count, *, interactive=False):
     from .scenario import fingerprint
     from .report_cards import render_report
     rows=[{'group':case['expected_status'],'cells':[case['id'],case['scenario']['model'],case['expected_status'],fingerprint(case['scenario'])]}for case in manifest['cases']]
     return render_report('Interlock selected regression declarations',
         'All input declarations validated, including omitted cases. Selected cases keep their original order, complete scenario definitions and caller-declared expectations. Full private selected configuration is embedded in this page and native JSON download. Run check-cases separately with explicit bounds. No search, source-pin check, handlers, observed outcomes or safety conclusion. Omitted declarations are not included or assessed by a later selected run.',
         ['Case ID','Declared model','Declared expectation','Scenario identity'],rows,payload=manifest,
-        summary=f"Selected {len(rows)} of {original_count} declarations; {original_count-len(rows)} omitted. Download report JSON is a runnable manifest, not a passing-run report. Incomplete searches never pass.")
+        summary=f"Selected {len(rows)} of {original_count} declarations; {original_count-len(rows)} omitted. Download report JSON includes all shown scenarios. Choose explicit cases below for a separate subset. No execution or safety approval."if interactive else f"Selected {len(rows)} of {original_count} declarations; {original_count-len(rows)} omitted. Download report JSON is a runnable manifest, not a passing-run report. Incomplete searches never pass.",extra_script=__import__('pathlib').Path(__file__).with_name('ui').joinpath('case_picker.js').read_text()if interactive else'')
 
 
 def combine_case_manifests(left,right):
