@@ -222,6 +222,10 @@ def main(argv: list[str] | None = None) -> int:
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
+    depth_combine = commands.add_parser("combine-case-depths", help="Combine compatible complete retained depth slices without dropping conflicting claims or executing models")
+    depth_combine.add_argument("left")
+    depth_combine.add_argument("right")
+    depth_combine.add_argument("--html", action="store_true")
     depth_select = commands.add_parser("select-case-depths", help="Extract explicit cases from a fully validated retained matrix, preserving every recorded depth without execution")
     depth_select.add_argument("report")
     depth_select.add_argument("--case", action="append", required=True)
@@ -511,6 +515,12 @@ def main(argv: list[str] | None = None) -> int:
             result=match_witness_cases(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES),read_json(args.manifest))
             print(render_witness_case_match(result)if args.html else json.dumps(result,indent=2))
             return 0 if result['matched']else 1
+        if args.command == "combine-case-depths":
+            from .depth_selection import combine_depth_cases
+            from .case_depths import render_case_depths
+            result = combine_depth_cases(read_json(args.left), read_json(args.right))
+            print(render_case_depths(result) if args.html else json.dumps(result, indent=2))
+            return 0
         if args.command == "select-case-depths":
             from .depth_selection import select_depth_cases
             from .case_depths import render_case_depths
