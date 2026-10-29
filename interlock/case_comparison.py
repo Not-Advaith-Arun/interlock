@@ -34,6 +34,16 @@ def _index(report, include_coverage=False):
                     or not isinstance(coverage.get('termination_reason'),str)or not 1<=len(coverage['termination_reason'])<=100
                     or any(type(coverage.get(k))is not int or coverage[k]<0 for k in counters)):
                 raise ValueError('coverage comparison requires recorded model bounds and complete coverage counters')
+            incomplete = observed == 'incomplete'
+            if (coverage['complete_up_to_depth'] is incomplete
+                    or coverage['termination_reason'] not in ('state_budget', 'depth_bound', 'state_space_exhausted')
+                    or (coverage['termination_reason'] == 'state_budget') != incomplete
+                    or coverage['states_explored'] > coverage['states_discovered']
+                    or coverage['states_discovered'] > bounds['max_states']
+                    or coverage['depth_reached'] > bounds['max_depth']
+                    or coverage['depth_limited_states'] > coverage['states_explored']
+                    or (not incomplete and (coverage['termination_reason'] == 'depth_bound') != (coverage['depth_limited_states'] > 0))):
+                raise ValueError('recorded coverage contradicts classification, bounds or termination')
             indexed[row['id']].update(bounds={k:bounds[k]for k in ('max_depth','max_states')},
                 coverage={k:coverage[k]for k in ('complete_up_to_depth','termination_reason',*counters)})
     return indexed
