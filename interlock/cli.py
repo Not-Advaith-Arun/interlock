@@ -222,6 +222,10 @@ def main(argv: list[str] | None = None) -> int:
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
+    depth_select = commands.add_parser("select-case-depths", help="Extract explicit cases from a fully validated retained matrix, preserving every recorded depth without execution")
+    depth_select.add_argument("report")
+    depth_select.add_argument("--case", action="append", required=True)
+    depth_select.add_argument("--html", action="store_true")
     depth_summary=commands.add_parser("case-depth-summary",help="Summarize retained complete/incomplete bounds separately without search, interpolation or safety claims")
     depth_summary.add_argument("report",type=Path)
     depth_summary.add_argument("--html",action="store_true")
@@ -507,6 +511,12 @@ def main(argv: list[str] | None = None) -> int:
             result=match_witness_cases(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES),read_json(args.manifest))
             print(render_witness_case_match(result)if args.html else json.dumps(result,indent=2))
             return 0 if result['matched']else 1
+        if args.command == "select-case-depths":
+            from .depth_selection import select_depth_cases
+            from .case_depths import render_case_depths
+            result = select_depth_cases(read_json(args.report), args.case)
+            print(render_case_depths(result) if args.html else json.dumps(result, indent=2))
+            return 0
         if args.command == "case-depth-summary":
             from .depth_summary import summarize_depths,render_depth_summary
             result=summarize_depths(read_json(args.report))
