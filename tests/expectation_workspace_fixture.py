@@ -1,0 +1,14 @@
+from pathlib import Path
+import json,subprocess,sys,copy
+from interlock.case_template import case_template
+root=Path(sys.argv[1]);manifest=root/'cases.json'
+def cli(*args):return subprocess.run([sys.executable,'-m','interlock',*map(str,args)],capture_output=True,text=True)
+if len(sys.argv)==2:
+ manifest.write_text(json.dumps(case_template(['retry-fixed','retry-conflict'])));before=manifest.read_bytes();(root/'before').write_bytes(before);h=cli('expectation-template',manifest);assert h.returncode==0,h.stderr;(root/'workspace.html').write_text(h.stdout)
+ code="from unittest.mock import patch;from interlock.cli import main\nwith patch('interlock.engine._initial',side_effect=RuntimeError('search forbidden')),patch('interlock.fixture.check_fixture',side_effect=RuntimeError('handler forbidden')):raise SystemExit(main("+repr(['expectation-template',str(manifest),'--json'])+"))";assert subprocess.run([sys.executable,'-c',code],capture_output=True).returncode==0
+else:
+ before=(root/'before').read_bytes();file=root/'draft.json';good=file.read_bytes();draft=json.loads(good);assert draft['expectations']==[{'id':'retry-fixed','expected_status':'branch_failure'}];assert manifest.read_bytes()==before;r=cli('revise-case-expectations',manifest,file);assert r.returncode==0,r.stderr;candidate=json.loads(r.stdout);old=json.loads(before);assert candidate['cases'][1]==old['cases'][1];assert candidate['cases'][0]['scenario']==old['cases'][0]['scenario'];assert candidate['cases'][0]['expected_status']=='branch_failure';new=root/'new-cases.json';new.write_text(r.stdout);r=cli('check-cases',new,'--max-depth','1','--max-states','100');assert r.returncode!=0 and any(c['verdict']=='unexpected'for c in json.loads(r.stdout)['cases']);assert manifest.read_bytes()==before
+ for bad in [{**draft,'manifest_sha256':'wrong'},{**draft,'expectations':draft['expectations']*2},{**draft,'expectations':[{'id':'unknown','expected_status':'branch_failure'}]},{**draft,'expectations':[{'id':'retry-fixed','expected_status':'incomplete'}]}]:
+  file.write_text(json.dumps(bad));r=cli('revise-case-expectations',manifest,file);assert r.returncode==2 and not r.stdout;assert manifest.read_bytes()==before
+ file.write_bytes(good);changed=json.loads(before);changed['cases'][1]['expected_status']='baseline_failure';manifest.write_text(json.dumps(changed));r=cli('revise-case-expectations',manifest,file);assert r.returncode==2 and not r.stdout;manifest.write_bytes(before)
+ code="from unittest.mock import patch;from interlock.cli import main\nwith patch('interlock.engine._initial',side_effect=RuntimeError('search forbidden')),patch('interlock.fixture.check_fixture',side_effect=RuntimeError('handler forbidden')):raise SystemExit(main("+repr(['revise-case-expectations',str(manifest),str(file)])+"))";assert subprocess.run([sys.executable,'-c',code],capture_output=True).returncode==0

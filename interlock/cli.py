@@ -222,6 +222,12 @@ def main(argv: list[str] | None = None) -> int:
     case_template_parser=commands.add_parser("case-template",help="Draft a model regression manifest from explicit bundled references; frozen expectations, no search/handlers executed")
     case_template_parser.add_argument("--fixture",action="append",choices=sorted(REFERENCE_EXPECTATIONS),required=True,help="Select1..8 unique references, repeat explicitly; expected failures are not safety success")
     case_template_parser.add_argument("--html",action="store_true",help="Inspect reference metadata and download the full native manifest; includes bundled scenario definitions")
+    expectation_template = commands.add_parser("expectation-template", help="Prepare explicit guarded caller expectation edits without scenarios or execution")
+    expectation_template.add_argument("manifest")
+    expectation_template.add_argument("--json", action="store_true")
+    expectations = commands.add_parser("revise-case-expectations", help="Export a new private full-scenario manifest from explicit guarded declaration edits; never execute or overwrite input")
+    expectations.add_argument("manifest")
+    expectations.add_argument("draft")
     depth_combine = commands.add_parser("combine-case-depths", help="Combine compatible complete retained depth slices without dropping conflicting claims or executing models")
     depth_combine.add_argument("left")
     depth_combine.add_argument("right")
@@ -515,6 +521,15 @@ def main(argv: list[str] | None = None) -> int:
             result=match_witness_cases(read_json(args.witness,max_bytes=MAX_WITNESS_BYTES),read_json(args.manifest))
             print(render_witness_case_match(result)if args.html else json.dumps(result,indent=2))
             return 0 if result['matched']else 1
+        if args.command == "expectation-template":
+            from .expectation_workspace import expectation_template, render_expectation_template
+            result = expectation_template(read_json(args.manifest))
+            print(json.dumps(result, indent=2) if args.json else render_expectation_template(result))
+            return 0
+        if args.command == "revise-case-expectations":
+            from .expectation_workspace import revise_expectations
+            print(json.dumps(revise_expectations(read_json(args.manifest), read_json(args.draft)), indent=2))
+            return 0
         if args.command == "combine-case-depths":
             from .depth_selection import combine_depth_cases
             from .case_depths import render_case_depths
